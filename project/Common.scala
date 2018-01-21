@@ -14,8 +14,7 @@ object Common extends AutoPlugin {
 
   override lazy val projectSettings =
   Dependencies.Common ++ Seq(
-    // organization := "com.lightbend.akka",
-    // organizationName := "Lightbend Inc.",
+    organization := "aserrallerios",
     homepage := Some(url("https://github.com/aserrallerios/kcl-akka-stream")),
     scmInfo := Some(ScmInfo(url("https://github.com/aserrallerios/kcl-akka-stream"), "git@github.com:aserrallerios/kcl-akka-stream.git")),
     developers += Developer("aserralle",

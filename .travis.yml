@@ -1,49 +1,41 @@
 language: scala
-
 sudo: false
-
 scala:
-  - "2.11.11"
-  - "2.12.2"
-
+- 2.11.11
+- 2.12.4
 jdk:
-  - oraclejdk8
-
+- oraclejdk8
 script:
-  - sbt -J-XX:ReservedCodeCacheSize=128m ++$TRAVIS_SCALA_VERSION ";test:compile"
-  # make 'git branch' work again
-  - git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH"
-  # make comparing to origin/master work
-  - git remote set-branches --add origin master
-  - git fetch
-  # check unformatted code
-  - git diff --exit-code --color || { echo "[error] Unformatted code found. Please run 'test:compile' and commit the reformatted code."; false; }
-
+- sbt -J-XX:ReservedCodeCacheSize=128m ++$TRAVIS_SCALA_VERSION ";test:compile"
+# make 'git branch' work again
+- git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH"
+# make comparing to origin/master work
+- git remote set-branches --add origin master
+- git fetch
+# check unformatted code
+- git diff --exit-code --color || { echo "[error] Unformatted code found. Please run 'test:compile' and commit the reformatted code."; false; } && sbt -J-XX:ReservedCodeCacheSize=128m ++$TRAVIS_SCALA_VERSION
+- find . -name "*.log" -exec ./scripts/cat-log.sh {} \;
 before_cache:
-  - find $HOME/.ivy2 -name "ivydata-*.properties" -print -delete
-  - find $HOME/.sbt  -name "*.lock"               -print -delete
-
+- find $HOME/.ivy2 -name "ivydata-*.properties" -print -delete
+- find $HOME/.sbt  -name "*.lock"               -print -delete
 cache:
   directories:
-    - $HOME/.ivy2/cache
-    - $HOME/.sbt/boot
-
+  - "$HOME/.ivy2/cache"
+  - "$HOME/.sbt/boot"
 deploy:
   provider: script
   skip_cleanup: true
   script:
-    - sbt -J-XX:ReservedCodeCacheSize=128m ++$TRAVIS_SCALA_VERSION publish
+  - sbt -J-XX:ReservedCodeCacheSize=128m ++$TRAVIS_SCALA_VERSION publish
   on:
     tags: true
-    repo: akka/alpakka
-    condition: $AKKA_SERIES = 2.4
-
+    repo: aserrallerios/kcl-akka-stream
+    condition: "$AKKA_SERIES = 2.5"
 env:
   matrix:
-    - AKKA_SERIES=2.4
-    - AKKA_SERIES=2.5
+  - AKKA_SERIES=2.5
   global:
-    # encrypt with: travis encrypt BINTRAY_USER=...
-    - secure: "foo"
-    # encrypt with: travis encrypt BINTRAY_PASS=...
-    - secure: "foo"
+  # travis encrypt BINTRAY_USER=...
+  - secure: H5ao4Yv0sgIrovVczAi8jkhZ+9uJVYo4MkWYlUZVd4DOCC8E1RYJgq9d1zLDmGSVOBg0nmHIoute7FkI+H3UhTLjmobfEkVYhWnBfcmicgXO6dASDy6KDClwyRLcHBg9coi/3x/Aq3X3tYqubumWXgBDy6SBcEJiQryZTqn7qOe0ErAYt/+ChjZWmyZxUfxErBAkikRCVLKVvNO5mxH9aEfT7GMnSTe+5G5rkZNqXo7D8DQCHE4AMp2FVFkPtJlqVIGOBF4Ot7kVp7In1Tc1gMSakiP4rcbZjFzGTpqUOLi3QPPXDqTO64Zw1MMZ5X+l/XaLnoLbMRLlV6ibDMtST1mkevIZBqUjqJvd7FrOp7lDtbYT0gnpLPuk2MYpWhKWbGkA6LY7f1NzuSjSdHrZaBd4wHjQ/3BfAgAYt88OcEJfKyTmxeo73YZyekQDNAgGiYh9ZzkU34svN2JirKwUh3CBq8+ZTIE8GOW9WCTk7MvgsSDkIgJygXyayuSntQcIkhUqrnuFGT7zcTbPP/eh+0w0Nfrd/1jmleoYmEDMod+u4QTBfp8ctgqmKWZMkGimzVF+41Fl8pqCMAVKK1SMn2e0HrcCCqqT+hX2DPZCn9nG83nP7J104dxXQkAieYg/DBFbo9s5qsy27ZkXqGaetfNV1/8JpAiO39KrpBx767g=
+  # travis encrypt BINTRAY_PASS=...
+  - secure: QCmVD9ybtoNZS/txKvKXV6TKvJe+UIcNqsguSu2/xbUjMI1mkSCzCfMtSQHzwxc0HBD/oumcjP8wN2fFtVdzUuCQPeGMg6uxn5mcrwTj2jq2EmC+sCup6MMF9ZKVE/+gobB68J9hcXC4TrKUCNRlZ8mkzQquPAY4a4OJrnz5b4NwwsWlqLxv9rnOzB+f6+8AhSAq7gEuzx7yekDtVDpEdNgUaEfLn+t8ZEdVjs+CqmAS/hG7CKbuo3ytkOepLToV/Grm66oUZzz8TgleJAQdoo3ebbC/0DapRSnGiumVk+E69DuZT/hT/quSCUuMM/+GUAKZklYIeDR845VcmEkFIjZw5bsviv/7lSS2k9LNA6ZIwuK3Ab4EGMaLCuSV/aFSAJTLxH1EIR0FfXJoKuoVHYBVrb5Zqzjunqdb31CohFbn9xVQNOVJ/jaNS3u32o1TNFgS7/M1H2pAe7sg/ky1N92IOldswZKFKewi/gDOSEZiIdxNvkFgRGWra3rMURd3pK5Sj45s9M9VmjakzmitBlJijfxSyaF87kBSYcEcAFqVQZHDwslXt+v++GjRtQPC87q//3m9h0FjRGfZWWY79h5+wU6qgsstpIrP+P1/xPcqy5CGTU+o8CAp5s1Z5ekMUEmQ0RXU7XmoOsu/qj2lXNhKuFDU/omqVLI5qJWfNg4=
