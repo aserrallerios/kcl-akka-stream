@@ -1,0 +1,49 @@
+language: scala
+
+sudo: false
+
+scala:
+  - "2.11.11"
+  - "2.12.2"
+
+jdk:
+  - oraclejdk8
+
+script:
+  - sbt -J-XX:ReservedCodeCacheSize=128m ++$TRAVIS_SCALA_VERSION ";test:compile"
+  # make 'git branch' work again
+  - git branch -f "$TRAVIS_BRANCH" && git checkout "$TRAVIS_BRANCH"
+  # make comparing to origin/master work
+  - git remote set-branches --add origin master
+  - git fetch
+  # check unformatted code
+  - git diff --exit-code --color || { echo "[error] Unformatted code found. Please run 'test:compile' and commit the reformatted code."; false; }
+
+before_cache:
+  - find $HOME/.ivy2 -name "ivydata-*.properties" -print -delete
+  - find $HOME/.sbt  -name "*.lock"               -print -delete
+
+cache:
+  directories:
+    - $HOME/.ivy2/cache
+    - $HOME/.sbt/boot
+
+deploy:
+  provider: script
+  skip_cleanup: true
+  script:
+    - sbt -J-XX:ReservedCodeCacheSize=128m ++$TRAVIS_SCALA_VERSION publish
+  on:
+    tags: true
+    repo: akka/alpakka
+    condition: $AKKA_SERIES = 2.4
+
+env:
+  matrix:
+    - AKKA_SERIES=2.4
+    - AKKA_SERIES=2.5
+  global:
+    # encrypt with: travis encrypt BINTRAY_USER=...
+    - secure: "foo"
+    # encrypt with: travis encrypt BINTRAY_PASS=...
+    - secure: "foo"
