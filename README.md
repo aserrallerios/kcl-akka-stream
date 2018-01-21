@@ -1,4 +1,4 @@
-# Akka Stream Source for Kinesis Client Library [![travis-badge][]][travis]
+# Akka Stream Source for Kinesis Client Library [![travis-badge][]][travis] [![Bintray](https://img.shields.io/bintray/v/aserrallerios/maven/kcl-akka-stream.svg)]()
 
 [travis]:                https://travis-ci.org/aserrallerios/kcl-akka-stream
 [travis-badge]:          https://travis-ci.org/aserrallerios/kcl-akka-stream.svg?branch=master
@@ -11,7 +11,19 @@ For more information about KCL please visit the [official documentation](http://
 
 ## Installation
 
-TODO bintray publish
+```xml
+<dependency>
+  <groupId>aserrallerios</groupId>
+  <artifactId>kcl-akka-stream_2.11</artifactId>
+  <version>0.1</version>
+  <type>pom</type>
+</dependency>
+```
+
+```scala
+resolvers += "aserrallerios bintray" at "http://dl.bintray.com/content/aserrallerios/maven"
+libraryDependencies += "aserrallerios" %% "kcl-akka-stream" % "0.1"
+```
 
 ## Usage
 
