@@ -43,7 +43,7 @@ object Examples {
   //#worker-settings
   val workerSourceSettings = KinesisWorkerSourceSettings(
     bufferSize = 1000,
-    checkWorkerPeriodicity = 1 minute)
+    terminateStreamGracePeriod = 1 minute)
   val builder: IRecordProcessorFactory => Worker = { recordProcessorFactory =>
     new Worker.Builder()
       .recordProcessorFactory(recordProcessorFactory)
@@ -65,16 +65,16 @@ object Examples {
   //#worker-source
   implicit val _ =
     ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(1000))
-  KinesisWorker(builder, workerSourceSettings).to(Sink.ignore)
+  KinesisWorkerSource(builder, workerSourceSettings).to(Sink.ignore)
   //#worker-source
 
   //#checkpoint
   val checkpointSettings = KinesisWorkerCheckpointSettings(100, 30 seconds)
-  KinesisWorker(builder, workerSourceSettings)
-    .via(KinesisWorker.checkpointRecordsFlow(checkpointSettings))
+  KinesisWorkerSource(builder, workerSourceSettings)
+    .via(KinesisWorkerSource.checkpointRecordsFlow(checkpointSettings))
     .to(Sink.ignore)
-  KinesisWorker(builder, workerSourceSettings).to(
-    KinesisWorker.checkpointRecordsSink(checkpointSettings))
+  KinesisWorkerSource(builder, workerSourceSettings).to(
+    KinesisWorkerSource.checkpointRecordsSink(checkpointSettings))
   //#checkpoint
 
 }

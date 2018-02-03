@@ -2,8 +2,9 @@
  * Copyright (C) 2018 Albert Serrallé
  */
 
-package aserralle.akka.stream.kcl.worker
+package aserralle.akka.stream.kcl
 
+import akka.Done
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason
 import com.amazonaws.services.kinesis.clientlibrary.types.ExtendedSequenceNumber
@@ -26,13 +27,17 @@ class CommittableRecord(
     recordProcessor.shutdown
   def canBeCheckpointed(): Boolean =
     recordProcessorShutdownReason().isEmpty
-  def checkpoint(): Future[Unit] =
-    Future(checkpointer.checkpoint(record))
+  def tryToCheckpoint(): Future[Done] =
+    Future {
+      checkpointer.checkpoint(record)
+      Done
+    }
 
 }
 
 object CommittableRecord {
 
+  // Only makes sense to compare Records belonging to the same shard
   implicit val orderBySequenceNumber: Ordering[CommittableRecord] =
     Ordering.by(_.sequenceNumber)
 

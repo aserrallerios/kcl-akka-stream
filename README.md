@@ -36,7 +36,7 @@ In order to use it, you need to provide a Worker builder and the Source settings
 ```scala
 val workerSourceSettings = KinesisWorkerSourceSettings(
     bufferSize = 1000,
-    checkWorkerPeriodicity = 1 minute)
+    terminateStreamGracePeriod = 1 minute)
   val builder: IRecordProcessorFactory => Worker = { recordProcessorFactory =>
     new Worker.Builder()
       .recordProcessorFactory(recordProcessorFactory)
@@ -71,7 +71,7 @@ In order to use the Flow you can provide additional settings:
 
 ```scala
  val checkpointSettings = KinesisWorkerCheckpointSettings(100, 30 seconds)
-  KinesisWorker(builder, workerSourceSettings)
+  KinesisWorkerSource(builder, workerSourceSettings)
     .via(KinesisWorker.checkpointRecordsFlow(checkpointSettings))
     .to(Sink.ignore)
   KinesisWorker(builder, workerSourceSettings).to(

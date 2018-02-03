@@ -7,8 +7,7 @@ package aserralle.akka.stream.kcl.javadsl
 import java.util.concurrent.Executor
 
 import akka.NotUsed
-import aserralle.akka.stream.kcl.worker.CommittableRecord
-import aserralle.akka.stream.kcl.{scaladsl, _}
+import aserralle.akka.stream.kcl.{CommittableRecord, scaladsl, _}
 import akka.stream.javadsl.{Flow, Sink, Source}
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker
@@ -16,7 +15,7 @@ import com.amazonaws.services.kinesis.model.Record
 
 import scala.concurrent.ExecutionContext
 
-object KinesisWorker {
+object KinesisWorkerSource {
 
   abstract class WorkerBuilder {
     def build(r: IRecordProcessorFactory): Worker
@@ -26,8 +25,8 @@ object KinesisWorker {
       workerBuilder: WorkerBuilder,
       settings: KinesisWorkerSourceSettings,
       workerExecutor: Executor
-  ): Source[CommittableRecord, NotUsed] =
-    scaladsl.KinesisWorker
+  ): Source[CommittableRecord, Worker] =
+    scaladsl.KinesisWorkerSource
       .apply(workerBuilder.build, settings)(
         ExecutionContext.fromExecutor(workerExecutor))
       .asJava
@@ -35,7 +34,7 @@ object KinesisWorker {
   def create(
       workerBuilder: WorkerBuilder,
       workerExecutor: Executor
-  ): Source[CommittableRecord, NotUsed] =
+  ): Source[CommittableRecord, Worker] =
     create(workerBuilder,
            KinesisWorkerSourceSettings.defaultInstance,
            workerExecutor)
@@ -43,7 +42,7 @@ object KinesisWorker {
   def checkpointRecordsFlow(
       settings: KinesisWorkerCheckpointSettings
   ): Flow[CommittableRecord, Record, NotUsed] =
-    scaladsl.KinesisWorker.checkpointRecordsFlow(settings).asJava
+    scaladsl.KinesisWorkerSource.checkpointRecordsFlow(settings).asJava
 
   def checkpointRecordsFlow(): Flow[CommittableRecord, Record, NotUsed] =
     checkpointRecordsFlow(KinesisWorkerCheckpointSettings.defaultInstance)
@@ -51,7 +50,7 @@ object KinesisWorker {
   def checkpointRecordsSink(
       settings: KinesisWorkerCheckpointSettings
   ): Sink[CommittableRecord, NotUsed] =
-    scaladsl.KinesisWorker.checkpointRecordsSink(settings).asJava
+    scaladsl.KinesisWorkerSource.checkpointRecordsSink(settings).asJava
 
   def checkpointRecordsSink(): Sink[CommittableRecord, NotUsed] =
     checkpointRecordsSink(KinesisWorkerCheckpointSettings.defaultInstance)

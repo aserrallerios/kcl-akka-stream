@@ -4,35 +4,54 @@
 
 package aserralle.akka.stream.kcl.scaladsl
 
-import akka.NotUsed
 import akka.stream.Supervision.{Resume, Stop}
-import aserralle.akka.stream.kcl.worker.CommittableRecord
+import akka.stream._
+import akka.stream.scaladsl.{Flow, GraphDSL, Keep, Sink, Source, Zip}
+import akka.{Done, NotUsed}
+import aserralle.akka.stream.kcl.Errors.WorkerUnexpectedShutdown
 import aserralle.akka.stream.kcl.{
+  CommittableRecord,
+  IRecordProcessor,
   KinesisWorkerCheckpointSettings,
-  KinesisWorkerSourceSettings,
-  KinesisWorkerSourceStage
+  KinesisWorkerSourceSettings
 }
-import akka.stream.{scaladsl, ActorAttributes, FlowShape}
-import akka.stream.scaladsl.{Flow, GraphDSL, Sink, Source, Zip}
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker
 import com.amazonaws.services.kinesis.model.Record
 
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
 
-object KinesisWorker {
+object KinesisWorkerSource {
 
   def apply(
       workerBuilder: IRecordProcessorFactory => Worker,
       settings: KinesisWorkerSourceSettings =
         KinesisWorkerSourceSettings.defaultInstance
   )(implicit workerExecutor: ExecutionContext)
-    : Source[CommittableRecord, NotUsed] =
-    Source.fromGraph(
-      new KinesisWorkerSourceStage(settings.bufferSize,
-                                   settings.checkWorkerPeriodicity,
-                                   workerBuilder))
+    : Source[CommittableRecord, Worker] =
+    Source
+      .queue[CommittableRecord](settings.bufferSize,
+                                OverflowStrategy.backpressure)
+      .watchTermination()(Keep.both)
+      .mapMaterializedValue {
+        case (queue, watch) =>
+          val worker = workerBuilder(
+            new IRecordProcessorFactory {
+              override def createProcessor(): IRecordProcessor =
+                new IRecordProcessor(queue.offer,
+                                     settings.terminateStreamGracePeriod)
+            }
+          )
+          Future(worker.run()).onComplete {
+            case Failure(ex) =>
+              queue.fail(WorkerUnexpectedShutdown(ex))
+            case Success(_) => queue.complete()
+          }
+          watch.onComplete(_ => Future(worker.shutdown()))
+          worker
+      }
 
   def checkpointRecordsFlow(
       settings: KinesisWorkerCheckpointSettings =
@@ -46,14 +65,14 @@ object KinesisWorker {
 
         val `{` =
           b.add(scaladsl.Broadcast[immutable.Seq[CommittableRecord]](2))
-        val `}` = b.add(Zip[Unit, immutable.Seq[CommittableRecord]])
+        val `}` = b.add(Zip[Done, immutable.Seq[CommittableRecord]])
         val `=` = b.add(Flow[Record])
 
         `{`.out(0)
           .map(_.max)
           .mapAsync(1)(r =>
-            if (r.canBeCheckpointed()) r.checkpoint()
-            else Future.successful(())) ~> `}`.in0
+            if (r.canBeCheckpointed()) r.tryToCheckpoint()
+            else Future.successful(Done)) ~> `}`.in0
         `{`.out(1) ~> `}`.in1
 
         `}`.out.map(_._2).mapConcat(identity).map(_.record) ~> `=`

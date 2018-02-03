@@ -8,7 +8,7 @@ import scala.concurrent.duration._
 
 case class KinesisWorkerSourceSettings(
     bufferSize: Int,
-    checkWorkerPeriodicity: FiniteDuration) {
+    terminateStreamGracePeriod: FiniteDuration) {
   require(
     bufferSize >= 1,
     "Buffer size must be greater than 0; use size 1 to disable stage buffering"
@@ -29,10 +29,9 @@ object KinesisWorkerSourceSettings {
   /**
     * Java API
     */
-  def create(
-      bufferSize: Int,
-      checkWorkerPeriodicity: FiniteDuration): KinesisWorkerSourceSettings =
-    KinesisWorkerSourceSettings(bufferSize, checkWorkerPeriodicity)
+  def create(bufferSize: Int, terminateStreamGracePeriod: FiniteDuration)
+    : KinesisWorkerSourceSettings =
+    KinesisWorkerSourceSettings(bufferSize, terminateStreamGracePeriod)
 
 }
 

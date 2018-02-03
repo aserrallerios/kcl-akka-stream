@@ -9,15 +9,14 @@ import java.util.Date
 import java.util.concurrent.Semaphore
 
 import akka.stream.KillSwitches
-import aserralle.akka.stream.kcl.KinesisErrors.WorkerUnexpectedShutdown
-import aserralle.akka.stream.kcl.scaladsl.KinesisWorker
-import aserralle.akka.stream.kcl.worker.{CommittableRecord, IRecordProcessor}
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
+import aserralle.akka.stream.kcl.Errors.WorkerUnexpectedShutdown
+import aserralle.akka.stream.kcl.scaladsl.KinesisWorkerSource
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.{
-  v2,
-  IRecordProcessorCheckpointer
+  IRecordProcessorCheckpointer,
+  v2
 }
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.{
   ShutdownReason,
@@ -31,13 +30,15 @@ import com.amazonaws.services.kinesis.clientlibrary.types.{
 }
 import com.amazonaws.services.kinesis.model.Record
 import org.mockito.Mockito._
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
 import org.scalatest.concurrent.Eventually
 import org.scalatest.{Matchers, WordSpecLike}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 
-class KinesisWorkerSpec
+class KinesisWorkerSourceSourceSpec
     extends WordSpecLike
     with Matchers
     with DefaultTestContext
@@ -87,10 +88,6 @@ class KinesisWorkerSpec
       sinkProbe.expectComplete()
     }
 
-    "backpressure the IRecordProcessor when the downstream backpressures and the buffer size gets full" in {
-      pending
-    }
-
     "call Worker shutdown on stage completion" in new KinesisWorkerContext {
       killSwitch.shutdown()
 
@@ -101,9 +98,17 @@ class KinesisWorkerSpec
       }
     }
 
-    "complete the stage if the Worker is shutdown" in new KinesisWorkerContext(
-      workerShuttingDown = true) {
-      sinkProbe.expectError(WorkerUnexpectedShutdown)
+    "complete the stage if the Worker is shutdown" in new KinesisWorkerContext {
+      lock.release()
+      sinkProbe.expectComplete()
+      eventually {
+        verify(worker).run()
+      }
+    }
+
+    "complete the stage with error if the Worker fails" in new KinesisWorkerContext(
+      Some(WorkerUnexpectedShutdown(new RuntimeException()))) {
+      sinkProbe.expectError() shouldBe a[WorkerUnexpectedShutdown]
       eventually {
         verify(worker).run()
       }
@@ -111,10 +116,13 @@ class KinesisWorkerSpec
   }
 
   private abstract class KinesisWorkerContext(
-      workerShuttingDown: Boolean = false) {
+      workerFailure: Option[Throwable] = None) {
     protected val worker = org.mockito.Mockito.mock(classOf[Worker])
-    if (workerShuttingDown)
-      when(worker.hasGracefulShutdownStarted()).thenReturn(true)
+    val lock = new Semaphore(0)
+    when(worker.run()).then(new Answer[Unit] {
+      override def answer(invocation: InvocationOnMock): Unit =
+        workerFailure.fold(lock.acquire())(throw _)
+    })
 
     val semaphore = new Semaphore(0)
 
@@ -126,14 +134,17 @@ class KinesisWorkerSpec
       semaphore.release()
       worker
     }
-    val (killSwitch, sinkProbe) =
-      KinesisWorker(workerBuilder,
-                    KinesisWorkerSourceSettings(bufferSize = 10,
-                                                checkWorkerPeriodicity =
-                                                  1 second))
+    val ((killSwitch, watch), sinkProbe) =
+      KinesisWorkerSource(
+        workerBuilder,
+        KinesisWorkerSourceSettings(bufferSize = 10,
+                                    terminateStreamGracePeriod = 1 second))
         .viaMat(KillSwitches.single)(Keep.right)
+        .watchTermination()(Keep.both)
         .toMat(TestSink.probe)(Keep.both)
         .run()
+
+    watch.onComplete(_ => lock.release())
 
     sinkProbe.ensureSubscription()
     sinkProbe.request(1)
@@ -166,7 +177,7 @@ class KinesisWorkerSpec
   "KinesisWorker checkpoint Flow " must {
 
     "checkpoint batch of records of different shards" in new KinesisWorkerCheckpointContext {
-      val recordProcessor = new IRecordProcessor(_ => ())
+      val recordProcessor = new IRecordProcessor(_ => (), 1 second)
 
       val checkpointerShard1 =
         org.mockito.Mockito.mock(classOf[IRecordProcessorCheckpointer])
@@ -217,7 +228,7 @@ class KinesisWorkerSpec
     }
 
     "not checkpoint the batch if the IRecordProcessor has been shutdown" in new KinesisWorkerCheckpointContext {
-      val recordProcessor = new IRecordProcessor(_ => ())
+      val recordProcessor = new IRecordProcessor(_ => (), 1 second)
       recordProcessor.shutdown(
         new ShutdownInput().withShutdownReason(ShutdownReason.TERMINATE))
       val record = org.mockito.Mockito.mock(classOf[Record])
@@ -239,7 +250,7 @@ class KinesisWorkerSpec
     }
 
     "fail with Exception if checkpoint action fails" in new KinesisWorkerCheckpointContext {
-      val recordProcessor = new IRecordProcessor(_ => ())
+      val recordProcessor = new IRecordProcessor(_ => (), 1 second)
       val record = org.mockito.Mockito.mock(classOf[Record])
       when(record.getSequenceNumber).thenReturn("1")
       val checkpointer =
@@ -269,7 +280,7 @@ class KinesisWorkerSpec
       TestSource
         .probe[CommittableRecord]
         .via(
-          KinesisWorker
+          KinesisWorkerSource
             .checkpointRecordsFlow(
               KinesisWorkerCheckpointSettings(maxBatchSize = 100,
                                               maxBatchWait = 500 millis))

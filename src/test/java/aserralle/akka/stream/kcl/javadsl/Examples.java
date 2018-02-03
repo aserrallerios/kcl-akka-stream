@@ -11,7 +11,7 @@ import akka.stream.javadsl.Flow;
 import akka.stream.javadsl.Source;
 import aserralle.akka.stream.kcl.KinesisWorkerCheckpointSettings;
 import aserralle.akka.stream.kcl.KinesisWorkerSourceSettings;
-import aserralle.akka.stream.kcl.worker.CommittableRecord;
+import aserralle.akka.stream.kcl.CommittableRecord;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.services.kinesis.AmazonKinesisAsync;
 import com.amazonaws.services.kinesis.AmazonKinesisAsyncClientBuilder;
@@ -37,7 +37,7 @@ public class Examples {
     //#init-system
 
     //#worker-settings
-    final KinesisWorker.WorkerBuilder workerBuilder = new KinesisWorker.WorkerBuilder() {
+    final KinesisWorkerSource.WorkerBuilder workerBuilder = new KinesisWorkerSource.WorkerBuilder() {
         @Override
         public Worker build(IRecordProcessorFactory recordProcessorFactory) {
             return new Worker.Builder()
@@ -51,17 +51,19 @@ public class Examples {
                     .build();
         }
     };
-    final KinesisWorkerSourceSettings workerSettings = KinesisWorkerSourceSettings.create(1000, FiniteDuration.apply(1L, TimeUnit.SECONDS));
+    final KinesisWorkerSourceSettings workerSettings = KinesisWorkerSourceSettings.create(
+            1000,
+            FiniteDuration.apply(1L, TimeUnit.SECONDS));
     //#worker-settings
 
     //#worker-source
     final Executor workerExecutor = Executors.newFixedThreadPool(100);
-    final Source<CommittableRecord, NotUsed> workerSource = KinesisWorker.create(workerBuilder, workerSettings, workerExecutor );
+    final Source<CommittableRecord, Worker> workerSource = KinesisWorkerSource.create(workerBuilder, workerSettings, workerExecutor );
     //#worker-source
 
     //#checkpoint
     final KinesisWorkerCheckpointSettings checkpointSettings = KinesisWorkerCheckpointSettings.create(1000, FiniteDuration.apply(30L, TimeUnit.SECONDS));
-    final Flow<CommittableRecord, Record, NotUsed> checkpointFlow = KinesisWorker.checkpointRecordsFlow(checkpointSettings);
+    final Flow<CommittableRecord, Record, NotUsed> checkpointFlow = KinesisWorkerSource.checkpointRecordsFlow(checkpointSettings);
     //#checkpoint
 
 }
