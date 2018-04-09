@@ -9,14 +9,12 @@ import java.util.concurrent.{Executors, TimeoutException}
 import akka.actor.ActorSystem
 import akka.stream.{ActorMaterializer, Materializer}
 import com.amazonaws.services.kinesis.AmazonKinesisAsync
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker
 import org.mockito.Mockito.reset
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, Suite}
 
 import scala.concurrent.duration._
-import scala.concurrent.{blocking, Await, ExecutionContext}
+import scala.concurrent.{Await, ExecutionContext, blocking}
 
 trait DefaultTestContext
     extends BeforeAndAfterAll

@@ -119,7 +119,7 @@ class KinesisWorkerSourceSourceSpec
       workerFailure: Option[Throwable] = None) {
     protected val worker = org.mockito.Mockito.mock(classOf[Worker])
     val lock = new Semaphore(0)
-    when(worker.run()).then(new Answer[Unit] {
+    when(worker.run()).thenAnswer(new Answer[Unit] {
       override def answer(invocation: InvocationOnMock): Unit =
         workerFailure.fold(lock.acquire())(throw _)
     })
@@ -138,7 +138,7 @@ class KinesisWorkerSourceSourceSpec
       KinesisWorkerSource(
         workerBuilder,
         KinesisWorkerSourceSettings(bufferSize = 10,
-                                    terminateStreamGracePeriod = 1 second))
+                                    terminateStreamGracePeriod = 1.second))
         .viaMat(KillSwitches.single)(Keep.right)
         .watchTermination()(Keep.both)
         .toMat(TestSink.probe)(Keep.both)
@@ -177,7 +177,7 @@ class KinesisWorkerSourceSourceSpec
   "KinesisWorker checkpoint Flow " must {
 
     "checkpoint batch of records of different shards" in new KinesisWorkerCheckpointContext {
-      val recordProcessor = new IRecordProcessor(_ => (), 1 second)
+      val recordProcessor = new IRecordProcessor(_ => (), 1.second)
 
       val checkpointerShard1 =
         org.mockito.Mockito.mock(classOf[IRecordProcessorCheckpointer])
@@ -228,7 +228,7 @@ class KinesisWorkerSourceSourceSpec
     }
 
     "not checkpoint the batch if the IRecordProcessor has been shutdown" in new KinesisWorkerCheckpointContext {
-      val recordProcessor = new IRecordProcessor(_ => (), 1 second)
+      val recordProcessor = new IRecordProcessor(_ => (), 1.second)
       recordProcessor.shutdown(
         new ShutdownInput().withShutdownReason(ShutdownReason.TERMINATE))
       val record = org.mockito.Mockito.mock(classOf[Record])
@@ -250,7 +250,7 @@ class KinesisWorkerSourceSourceSpec
     }
 
     "fail with Exception if checkpoint action fails" in new KinesisWorkerCheckpointContext {
-      val recordProcessor = new IRecordProcessor(_ => (), 1 second)
+      val recordProcessor = new IRecordProcessor(_ => (), 1.second)
       val record = org.mockito.Mockito.mock(classOf[Record])
       when(record.getSequenceNumber).thenReturn("1")
       val checkpointer =
@@ -283,7 +283,7 @@ class KinesisWorkerSourceSourceSpec
           KinesisWorkerSource
             .checkpointRecordsFlow(
               KinesisWorkerCheckpointSettings(maxBatchSize = 100,
-                                              maxBatchWait = 500 millis))
+                                              maxBatchWait = 500.millis))
         )
         .toMat(TestSink.probe)(Keep.both)
         .run()
