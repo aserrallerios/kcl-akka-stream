@@ -12,17 +12,26 @@ For more information about KCL please visit the [official documentation](http://
 ## Installation
 
 ```xml
+<repository>
+  <snapshots>
+    <enabled>false</enabled>
+  </snapshots>
+  <id>bintray-<username>-maven</id>
+  <name>bintray</name>
+  <url>https://dl.bintray.com/content/aserrallerios/maven</url>
+</repository>
+...
 <dependency>
   <groupId>aserrallerios</groupId>
   <artifactId>kcl-akka-stream_2.11</artifactId>
-  <version>0.1</version>
+  <version>0.3</version>
   <type>pom</type>
 </dependency>
 ```
 
 ```scala
-resolvers += "aserrallerios bintray" at "http://dl.bintray.com/content/aserrallerios/maven"
-libraryDependencies += "aserrallerios" %% "kcl-akka-stream" % "0.1"
+resolvers += "aserrallerios bintray" at "https://dl.bintray.com/content/aserrallerios/maven"
+libraryDependencies += "aserrallerios" %% "kcl-akka-stream" % "0.3"
 ```
 
 ## Usage
@@ -55,27 +64,29 @@ val workerSourceSettings = KinesisWorkerSourceSettings(
   }
 ```
 
-The Source also needs an `ExecutionContext` to run the Worker's thread and to execute record checkpoints. Then the Source can be created as usual:
+The Source also needs an `ExecutionContext` to run the Worker's thread and to commit/checkpoint records. Then the Source can be created as usual:
 
 ```scala
 implicit val _ =
-    ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(1000))
-  KinesisWorker(builder, workerSourceSettings).to(Sink.ignore)
+  ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(1000))
+KinesisWorkerSource(builder, workerSourceSettings).to(Sink.ignore)
 ```
 
 ### Committing records
 
-The KCL Worker Source publishes messages downstream that can be committed in order to mark progression of consumers by shard. This process can be done manually or using the provided checkpointer Flow.
+The KCL Worker Source publishes messages downstream that can be committed in order to mark progression of consumers by shard. This process can be done manually or using the provided checkpointer Flow/Sink.
 
-In order to use the Flow you can provide additional settings:
+In order to use the Flow/Sink you must provide additional checkpoint settings:
 
 ```scala
- val checkpointSettings = KinesisWorkerCheckpointSettings(100, 30 seconds)
-  KinesisWorkerSource(builder, workerSourceSettings)
-    .via(KinesisWorker.checkpointRecordsFlow(checkpointSettings))
-    .to(Sink.ignore)
-  KinesisWorker(builder, workerSourceSettings).to(
-    KinesisWorker.checkpointRecordsSink(checkpointSettings))
+val checkpointSettings = KinesisWorkerCheckpointSettings(100, 30 seconds)
+
+KinesisWorkerSource(builder, workerSourceSettings)
+  .via(KinesisWorker.checkpointRecordsFlow(checkpointSettings))
+  .to(Sink.ignore)
+
+KinesisWorkerSource(builder, workerSourceSettings).to(
+  KinesisWorker.checkpointRecordsSink(checkpointSettings))
 ```
 
 ## License
