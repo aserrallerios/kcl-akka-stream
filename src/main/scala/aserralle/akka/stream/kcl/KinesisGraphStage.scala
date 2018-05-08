@@ -21,9 +21,9 @@ import scala.concurrent.{ExecutionContext, Future}
 
 final class KinesisGraphStage(workerBuilder: IRecordProcessorFactory => Worker,
                               settings: KinesisWorkerSourceSettings =
-                                KinesisWorkerSourceSettings.defaultInstance)(
-    implicit e: ExecutionContext)
-    extends GraphStage[SourceShape[CommittableRecord]] {
+                              KinesisWorkerSourceSettings.defaultInstance)(
+                               implicit e: ExecutionContext)
+  extends GraphStage[SourceShape[CommittableRecord]] {
   private val out = Outlet[CommittableRecord]("KinesisKclSource.out")
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = {
@@ -54,11 +54,13 @@ final class KinesisGraphStage(workerBuilder: IRecordProcessorFactory => Worker,
 
       override def preStart(): Unit = {
         val worker = workerBuilder(
-          () =>
-            new IRecordProcessor(record => {
-              backpressure.acquire()
-              handleMessage.invoke(record)
-            }, settings.terminateStreamGracePeriod)
+          new IRecordProcessorFactory {
+            override def createProcessor(): IRecordProcessor =
+              new IRecordProcessor(record => {
+                backpressure.acquire()
+                handleMessage.invoke(record)
+              }, settings.terminateStreamGracePeriod)
+          }
         )
         Future(worker.run())
       }
