@@ -9,7 +9,12 @@ import akka.stream._
 import akka.stream.scaladsl.{Flow, GraphDSL, Keep, Sink, Source, Zip}
 import akka.{Done, NotUsed}
 import aserralle.akka.stream.kcl.Errors.WorkerUnexpectedShutdown
-import aserralle.akka.stream.kcl.{CommittableRecord, IRecordProcessor, KinesisWorkerCheckpointSettings, KinesisWorkerSourceSettings}
+import aserralle.akka.stream.kcl.{
+  CommittableRecord,
+  IRecordProcessor,
+  KinesisWorkerCheckpointSettings,
+  KinesisWorkerSourceSettings
+}
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker
 import com.amazonaws.services.kinesis.model.Record
@@ -23,26 +28,28 @@ import scala.util.{Failure, Success}
 object KinesisWorkerSource {
 
   def apply(
-             workerBuilder: IRecordProcessorFactory => Worker,
-             settings: KinesisWorkerSourceSettings =
-             KinesisWorkerSourceSettings.defaultInstance
-           )(implicit workerExecutor: ExecutionContext)
-  : Source[CommittableRecord, Worker] =
+      workerBuilder: IRecordProcessorFactory => Worker,
+      settings: KinesisWorkerSourceSettings =
+        KinesisWorkerSourceSettings.defaultInstance
+  )(implicit workerExecutor: ExecutionContext)
+    : Source[CommittableRecord, Worker] =
     Source
       .queue[CommittableRecord](settings.bufferSize,
-      OverflowStrategy.backpressure)
+                                OverflowStrategy.backpressure)
       .watchTermination()(Keep.both)
       .mapMaterializedValue {
         case (queue, watch) =>
           val worker = workerBuilder(
             new IRecordProcessorFactory {
               override def createProcessor(): IRecordProcessor =
-                new IRecordProcessor({ record =>
-                  //not sure about infinite await here, probably need to externalize it,
-                  // user mast provide grace period in config or something
-                  Await.result(queue.offer(record), Duration.Inf)
-                },
-                  settings.terminateStreamGracePeriod)
+                new IRecordProcessor(
+                  { record =>
+                    //not sure about infinite await here, probably need to externalize it,
+                    // user mast provide grace period in config or something
+                    Await.result(queue.offer(record), Duration.Inf)
+                  },
+                  settings.terminateStreamGracePeriod
+                )
             }
           )
           Future(worker.run()).onComplete {
@@ -55,9 +62,9 @@ object KinesisWorkerSource {
       }
 
   def checkpointRecordsFlow(
-                             settings: KinesisWorkerCheckpointSettings =
-                             KinesisWorkerCheckpointSettings.defaultInstance
-                           ): Flow[CommittableRecord, Record, NotUsed] =
+      settings: KinesisWorkerCheckpointSettings =
+        KinesisWorkerCheckpointSettings.defaultInstance
+  ): Flow[CommittableRecord, Record, NotUsed] =
     Flow[CommittableRecord]
       .groupBy(MAX_KINESIS_SHARDS, _.shardId)
       .groupedWithin(settings.maxBatchSize, settings.maxBatchWait)
@@ -88,9 +95,9 @@ object KinesisWorkerSource {
       })
 
   def checkpointRecordsSink(
-                             settings: KinesisWorkerCheckpointSettings =
-                             KinesisWorkerCheckpointSettings.defaultInstance
-                           ): Sink[CommittableRecord, NotUsed] =
+      settings: KinesisWorkerCheckpointSettings =
+        KinesisWorkerCheckpointSettings.defaultInstance
+  ): Sink[CommittableRecord, NotUsed] =
     checkpointRecordsFlow(settings).to(Sink.ignore)
 
   // http://docs.aws.amazon.com/streams/latest/dev/service-sizes-and-limits.html

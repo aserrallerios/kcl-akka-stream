@@ -21,9 +21,9 @@ import scala.concurrent.{ExecutionContext, Future}
 
 final class KinesisGraphStage(workerBuilder: IRecordProcessorFactory => Worker,
                               settings: KinesisWorkerSourceSettings =
-                              KinesisWorkerSourceSettings.defaultInstance)(
-                               implicit e: ExecutionContext)
-  extends GraphStage[SourceShape[CommittableRecord]] {
+                                KinesisWorkerSourceSettings.defaultInstance)(
+    implicit e: ExecutionContext)
+    extends GraphStage[SourceShape[CommittableRecord]] {
   private val out = Outlet[CommittableRecord]("KinesisKclSource.out")
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = {
