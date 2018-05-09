@@ -43,7 +43,8 @@ object Examples {
   //#worker-settings
   val workerSourceSettings = KinesisWorkerSourceSettings(
     bufferSize = 1000,
-    terminateStreamGracePeriod = 1 minute)
+    terminateStreamGracePeriod = 1 minute,
+    backpressureTimeout = 1.minute)
   val builder: IRecordProcessorFactory => Worker = { recordProcessorFactory =>
     new Worker.Builder()
       .recordProcessorFactory(recordProcessorFactory)

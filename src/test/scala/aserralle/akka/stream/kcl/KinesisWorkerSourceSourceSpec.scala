@@ -205,7 +205,8 @@ class KinesisWorkerSourceSourceSpec
       KinesisWorkerSource(
         workerBuilder,
         KinesisWorkerSourceSettings(bufferSize = 10,
-                                    terminateStreamGracePeriod = 1.second))
+                                    terminateStreamGracePeriod = 1.second,
+                                    backpressureTimeout = 1.minute))
         .viaMat(KillSwitches.single)(Keep.right)
         .watchTermination()(Keep.both)
         .toMat(TestSink.probe)(Keep.both)
@@ -241,7 +242,8 @@ class KinesisWorkerSourceSourceSpec
       KinesisWorkerSourceV2(
         workerBuilder,
         KinesisWorkerSourceSettings(bufferSize = 10,
-                                    terminateStreamGracePeriod = 1.second))
+                                    terminateStreamGracePeriod = 1.second,
+                                    backpressureTimeout = 1.minute))
         .viaMat(KillSwitches.single)(Keep.right)
         .watchTermination()(Keep.both)
         .toMat(TestSink.probe)(Keep.both)
