@@ -43,11 +43,9 @@ object KinesisWorkerSource {
             new IRecordProcessorFactory {
               override def createProcessor(): IRecordProcessor =
                 new IRecordProcessor(
-                  { record =>
-                    //not sure about infinite await here, probably need to externalize it,
-                    // user mast provide grace period in config or something
-                    Await.result(queue.offer(record), Duration.Inf)
-                  },
+                  record =>
+                    Await.result(queue.offer(record),
+                                 settings.backpressureTimeout),
                   settings.terminateStreamGracePeriod
                 )
             }
