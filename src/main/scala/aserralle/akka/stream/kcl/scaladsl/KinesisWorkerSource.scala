@@ -15,7 +15,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker
 import com.amazonaws.services.kinesis.model.Record
 
 import scala.collection.immutable
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.{Duration, DurationInt}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
@@ -37,7 +37,11 @@ object KinesisWorkerSource {
           val worker = workerBuilder(
             new IRecordProcessorFactory {
               override def createProcessor(): IRecordProcessor =
-                new IRecordProcessor(queue.offer,
+                new IRecordProcessor({ record =>
+                  //not sure about infinite await here, probably need to externalize it,
+                  // user mast provide grace period in config or something
+                  Await.result(queue.offer(record), Duration.Inf)
+                },
                   settings.terminateStreamGracePeriod)
             }
           )
