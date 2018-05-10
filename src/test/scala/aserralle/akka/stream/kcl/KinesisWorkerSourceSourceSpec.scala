@@ -12,10 +12,7 @@ import akka.stream.{Attributes, KillSwitches}
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import aserralle.akka.stream.kcl.Errors.WorkerUnexpectedShutdown
-import aserralle.akka.stream.kcl.scaladsl.{
-  KinesisWorkerSource,
-  KinesisWorkerSourceV2
-}
+import aserralle.akka.stream.kcl.scaladsl.KinesisWorkerSource
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.{
   IRecordProcessorCheckpointer,
@@ -149,37 +146,6 @@ class KinesisWorkerSourceSourceSpec
       killSwitch.shutdown()
       sinkProbe.expectComplete()
     }
-    "not drop messages in case of back-pressure with traditional implementation" in new KinesisWorkerContextV2
-    with TestData {
-      recordProcessor.initialize(initializationInput)
-      for (i <- 1 to 10) { // 10 is a buffer size
-        val record = org.mockito.Mockito.mock(classOf[Record])
-        when(record.getSequenceNumber).thenReturn(i.toString)
-        recordProcessor.processRecords(
-          recordsInput.withRecords(List(record).asJava))
-      }
-      //expect to consume all 10
-      for (_ <- 1 to 10) sinkProbe.requestNext()
-
-      //send another batch to exceed the queue size
-      Future {
-        for (i <- 1 to 25) { // 10 is a buffer size
-          val record = org.mockito.Mockito.mock(classOf[Record])
-          when(record.getSequenceNumber).thenReturn(i.toString)
-          recordProcessor.processRecords(
-            recordsInput.withRecords(List(record).asJava))
-        }
-      }
-
-      //expect to consume all 25 with slow consumer
-      for (_ <- 1 to 25) {
-        sinkProbe.requestNext()
-        Thread.sleep(100)
-      }
-
-      killSwitch.shutdown()
-      sinkProbe.expectComplete()
-    }
   }
 
   private abstract class KinesisWorkerContext(
@@ -203,43 +169,6 @@ class KinesisWorkerSourceSourceSpec
     }
     val ((killSwitch, watch), sinkProbe) =
       KinesisWorkerSource(
-        workerBuilder,
-        KinesisWorkerSourceSettings(bufferSize = 10,
-                                    terminateStreamGracePeriod = 1.second,
-                                    backpressureTimeout = 1.minute))
-        .viaMat(KillSwitches.single)(Keep.right)
-        .watchTermination()(Keep.both)
-        .toMat(TestSink.probe)(Keep.both)
-        .run()
-
-    watch.onComplete(_ => lock.release())
-
-    sinkProbe.ensureSubscription()
-    sinkProbe.request(1)
-
-    semaphore.acquire()
-  }
-  private abstract class KinesisWorkerContextV2(
-      workerFailure: Option[Throwable] = None) {
-    protected val worker = org.mockito.Mockito.mock(classOf[Worker])
-    val lock = new Semaphore(0)
-    when(worker.run()).thenAnswer(new Answer[Unit] {
-      override def answer(invocation: InvocationOnMock): Unit =
-        workerFailure.fold(lock.acquire())(throw _)
-    })
-
-    val semaphore = new Semaphore(0)
-
-    var recordProcessorFactory: IRecordProcessorFactory = _
-    var recordProcessor: v2.IRecordProcessor = _
-    val workerBuilder = { x: IRecordProcessorFactory =>
-      recordProcessorFactory = x
-      recordProcessor = x.createProcessor()
-      semaphore.release()
-      worker
-    }
-    val ((killSwitch, watch), sinkProbe) =
-      KinesisWorkerSourceV2(
         workerBuilder,
         KinesisWorkerSourceSettings(bufferSize = 10,
                                     terminateStreamGracePeriod = 1.second,

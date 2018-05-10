@@ -2,7 +2,6 @@ lazy val `kcl-akka-stream` =
   Project(id = "kcl-akka-stream", base = file("."))
     .enablePlugins(AutomateHeaderPlugin)
     .settings(
-      version := "0.4-SNAPSHOT",
       name := "kcl-akka-stream",
       // By default scalatest futures time out in 150 ms, dilate that to 600ms.
       // This should not impact the total test time as we don't expect to hit this
