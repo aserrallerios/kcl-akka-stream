@@ -8,7 +8,7 @@ import java.nio.ByteBuffer
 import java.util.Date
 import java.util.concurrent.Semaphore
 
-import akka.stream.{Attributes, KillSwitches}
+import akka.stream.KillSwitches
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import aserralle.akka.stream.kcl.Errors.WorkerUnexpectedShutdown
@@ -36,8 +36,9 @@ import org.scalatest.concurrent.Eventually
 import org.scalatest.{Matchers, WordSpecLike}
 
 import scala.collection.JavaConverters._
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
+import scala.util.Failure
 
 class KinesisWorkerSourceSourceSpec
     extends WordSpecLike
@@ -146,10 +147,29 @@ class KinesisWorkerSourceSourceSpec
       killSwitch.shutdown()
       sinkProbe.expectComplete()
     }
+
+    "stop the stream when back pressure timeout elapsed" in new KinesisWorkerContext(
+      backpressureTimeout = 100.milliseconds) with TestData {
+      recordProcessor.initialize(initializationInput)
+      //Fast consumer sends 25 messages into 10 items queue size
+      for (i <- 1 to 25) { // 10 is a buffer size
+        val record = org.mockito.Mockito.mock(classOf[Record])
+        when(record.getSequenceNumber).thenReturn(i.toString)
+        recordProcessor.processRecords(
+          recordsInput.withRecords(List(record).asJava))
+      }
+
+      Await.ready(watch, 5.seconds)
+      val Failure(exception) = watch.value.get
+      assert(exception.getMessage == "Back-pressure exhausted")
+
+      killSwitch.shutdown()
+    }
   }
 
   private abstract class KinesisWorkerContext(
-      workerFailure: Option[Throwable] = None) {
+      workerFailure: Option[Throwable] = None,
+      backpressureTimeout: FiniteDuration = 1.minute) {
     protected val worker = org.mockito.Mockito.mock(classOf[Worker])
     val lock = new Semaphore(0)
     when(worker.run()).thenAnswer(new Answer[Unit] {
@@ -172,7 +192,7 @@ class KinesisWorkerSourceSourceSpec
         workerBuilder,
         KinesisWorkerSourceSettings(bufferSize = 10,
                                     terminateStreamGracePeriod = 1.second,
-                                    backpressureTimeout = 1.minute))
+                                    backpressureTimeout = backpressureTimeout))
         .viaMat(KillSwitches.single)(Keep.right)
         .watchTermination()(Keep.both)
         .toMat(TestSink.probe)(Keep.both)
@@ -319,7 +339,6 @@ class KinesisWorkerSourceSourceSpec
               KinesisWorkerCheckpointSettings(maxBatchSize = 100,
                                               maxBatchWait = 500.millis))
         )
-        .withAttributes(Attributes.inputBuffer(initial = 200, max = 256))
         .toMat(TestSink.probe)(Keep.both)
         .run()
   }

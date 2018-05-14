@@ -20,9 +20,8 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker
 import com.amazonaws.services.kinesis.model.Record
 
 import scala.collection.immutable
-import scala.concurrent.duration.{Duration, DurationInt}
 import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.language.postfixOps
+import scala.util.control.Exception
 import scala.util.{Failure, Success}
 
 object KinesisWorkerSource {
@@ -44,12 +43,19 @@ object KinesisWorkerSource {
               override def createProcessor(): IRecordProcessor =
                 new IRecordProcessor(
                   record =>
-                    Await.result(queue.offer(record),
-                                 settings.backpressureTimeout),
+                    (Exception.nonFatalCatch either Await.result(
+                      queue.offer(record),
+                      settings.backpressureTimeout) left)
+                      .foreach(
+                        err =>
+                          queue.fail(
+                            new RuntimeException("Back-pressure exhausted",
+                                                 err))),
                   settings.terminateStreamGracePeriod
                 )
             }
           )
+
           Future(worker.run()).onComplete {
             case Failure(ex) =>
               queue.fail(WorkerUnexpectedShutdown(ex))
