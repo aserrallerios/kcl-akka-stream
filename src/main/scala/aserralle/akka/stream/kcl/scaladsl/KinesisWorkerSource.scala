@@ -8,7 +8,10 @@ import akka.stream.Supervision.{Resume, Stop}
 import akka.stream._
 import akka.stream.scaladsl.{Flow, GraphDSL, Keep, Sink, Source, Zip}
 import akka.{Done, NotUsed}
-import aserralle.akka.stream.kcl.Errors.WorkerUnexpectedShutdown
+import aserralle.akka.stream.kcl.Errors.{
+  BackpressureTimeout,
+  WorkerUnexpectedShutdown
+}
 import aserralle.akka.stream.kcl.{
   CommittableRecord,
   IRecordProcessor,
@@ -46,11 +49,7 @@ object KinesisWorkerSource {
                     (Exception.nonFatalCatch either Await.result(
                       queue.offer(record),
                       settings.backpressureTimeout) left)
-                      .foreach(
-                        err =>
-                          queue.fail(
-                            new RuntimeException("Back-pressure exhausted",
-                                                 err))),
+                      .foreach(_ => queue.fail(BackpressureTimeout)),
                   settings.terminateStreamGracePeriod
                 )
             }
