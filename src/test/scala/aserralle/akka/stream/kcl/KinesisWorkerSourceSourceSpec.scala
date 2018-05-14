@@ -22,12 +22,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.{
   ShutdownReason,
   Worker
 }
-import com.amazonaws.services.kinesis.clientlibrary.types.{
-  ExtendedSequenceNumber,
-  InitializationInput,
-  ProcessRecordsInput,
-  ShutdownInput
-}
+import com.amazonaws.services.kinesis.clientlibrary.types._
 import com.amazonaws.services.kinesis.model.Record
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
@@ -175,6 +170,37 @@ class KinesisWorkerSourceSourceSpec
   }
 
   "KinesisWorker checkpoint Flow " must {
+
+    "checkpoint batch of records with same sequence number" in new KinesisWorkerCheckpointContext {
+      val recordProcessor = new IRecordProcessor(_ => (), 1.second)
+
+      val checkpointerShard1 =
+        org.mockito.Mockito.mock(classOf[IRecordProcessorCheckpointer])
+      var latestRecordShard1: Record = _
+      for (i <- 1 to 3) {
+        val record = org.mockito.Mockito.mock(classOf[UserRecord])
+        when(record.getSequenceNumber).thenReturn("1")
+        when(record.getSubSequenceNumber).thenReturn(i.toLong)
+        sourceProbe.sendNext(
+          new CommittableRecord(
+            "shard-1",
+            org.mockito.Mockito.mock(classOf[ExtendedSequenceNumber]),
+            1L,
+            record,
+            recordProcessor,
+            checkpointerShard1
+          )
+        )
+        latestRecordShard1 = record
+      }
+
+      for (_ <- 1 to 3) sinkProbe.requestNext()
+
+      eventually(verify(checkpointerShard1).checkpoint(latestRecordShard1))
+
+      sourceProbe.sendComplete()
+      sinkProbe.expectComplete()
+    }
 
     "checkpoint batch of records of different shards" in new KinesisWorkerCheckpointContext {
       val recordProcessor = new IRecordProcessor(_ => (), 1.second)
