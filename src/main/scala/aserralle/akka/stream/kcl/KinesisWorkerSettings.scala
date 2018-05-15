@@ -8,7 +8,8 @@ import scala.concurrent.duration._
 
 case class KinesisWorkerSourceSettings(
     bufferSize: Int,
-    terminateStreamGracePeriod: FiniteDuration) {
+    terminateStreamGracePeriod: FiniteDuration,
+    backpressureTimeout: FiniteDuration) {
   require(
     bufferSize >= 1,
     "Buffer size must be greater than 0; use size 1 to disable stage buffering"
@@ -24,14 +25,18 @@ case class KinesisWorkerCheckpointSettings(maxBatchSize: Int,
 
 object KinesisWorkerSourceSettings {
 
-  val defaultInstance = KinesisWorkerSourceSettings(1000, 1.minute)
+  val defaultInstance = KinesisWorkerSourceSettings(1000, 1.minute, 1.minute)
 
   /**
     * Java API
     */
-  def create(bufferSize: Int, terminateStreamGracePeriod: FiniteDuration)
-    : KinesisWorkerSourceSettings =
-    KinesisWorkerSourceSettings(bufferSize, terminateStreamGracePeriod)
+  def create(
+      bufferSize: Int,
+      terminateStreamGracePeriod: FiniteDuration,
+      backpressureTimeout: FiniteDuration): KinesisWorkerSourceSettings =
+    KinesisWorkerSourceSettings(bufferSize,
+                                terminateStreamGracePeriod,
+                                backpressureTimeout)
 
 }
 

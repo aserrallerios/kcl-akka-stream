@@ -8,7 +8,10 @@ import akka.stream.Supervision.{Resume, Stop}
 import akka.stream._
 import akka.stream.scaladsl.{Flow, GraphDSL, Keep, Sink, Source, Zip}
 import akka.{Done, NotUsed}
-import aserralle.akka.stream.kcl.Errors.WorkerUnexpectedShutdown
+import aserralle.akka.stream.kcl.Errors.{
+  BackpressureTimeout,
+  WorkerUnexpectedShutdown
+}
 import aserralle.akka.stream.kcl.{
   CommittableRecord,
   IRecordProcessor,
@@ -20,7 +23,8 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker
 import com.amazonaws.services.kinesis.model.Record
 
 import scala.collection.immutable
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.util.control.Exception
 import scala.util.{Failure, Success}
 
 object KinesisWorkerSource {
@@ -40,10 +44,17 @@ object KinesisWorkerSource {
           val worker = workerBuilder(
             new IRecordProcessorFactory {
               override def createProcessor(): IRecordProcessor =
-                new IRecordProcessor(queue.offer,
-                                     settings.terminateStreamGracePeriod)
+                new IRecordProcessor(
+                  record =>
+                    (Exception.nonFatalCatch either Await.result(
+                      queue.offer(record),
+                      settings.backpressureTimeout) left)
+                      .foreach(_ => queue.fail(BackpressureTimeout)),
+                  settings.terminateStreamGracePeriod
+                )
             }
           )
+
           Future(worker.run()).onComplete {
             case Failure(ex) =>
               queue.fail(WorkerUnexpectedShutdown(ex))
