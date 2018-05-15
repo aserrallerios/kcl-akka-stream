@@ -7,6 +7,7 @@ package aserralle.akka.stream.kcl
 import java.nio.ByteBuffer
 import java.util.Date
 import java.util.concurrent.Semaphore
+import aserralle.akka.stream.kcl.Errors.BackpressureTimeout
 
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.Keep
@@ -161,7 +162,7 @@ class KinesisWorkerSourceSourceSpec
 
       Await.ready(watch, 5.seconds)
       val Failure(exception) = watch.value.get
-      assert(exception.getMessage == "Back-pressure exhausted")
+      assert(exception == BackpressureTimeout)
 
       killSwitch.shutdown()
     }
