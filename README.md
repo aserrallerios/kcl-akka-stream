@@ -31,7 +31,7 @@ For more information about KCL please visit the [official documentation](http://
 
 ```scala
 resolvers += "aserrallerios bintray" at "https://dl.bintray.com/content/aserrallerios/maven"
-libraryDependencies += "aserrallerios" %% "kcl-akka-stream" % "0.3"
+libraryDependencies += "aserrallerios" %% "kcl-akka-stream" % "0.4"
 ```
 
 ## Usage
@@ -45,7 +45,8 @@ In order to use it, you need to provide a Worker builder and the Source settings
 ```scala
 val workerSourceSettings = KinesisWorkerSourceSettings(
     bufferSize = 1000,
-    terminateStreamGracePeriod = 1 minute)
+    terminateStreamGracePeriod = 1 minute,
+    backpressureTimeout = 1 minute)
   val builder: IRecordProcessorFactory => Worker = { recordProcessorFactory =>
     new Worker.Builder()
       .recordProcessorFactory(recordProcessorFactory)
@@ -88,6 +89,8 @@ KinesisWorkerSource(builder, workerSourceSettings)
 KinesisWorkerSource(builder, workerSourceSettings).to(
   KinesisWorker.checkpointRecordsSink(checkpointSettings))
 ```
+
+Note that checkpointer Flow may not maintain input order of records of different shards.
 
 ## License
 
