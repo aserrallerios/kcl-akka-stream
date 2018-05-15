@@ -15,6 +15,8 @@ script:
 # check unformatted code
 - git diff --exit-code --color || { echo "[error] Unformatted code found. Please run 'test:compile' and commit the reformatted code."; false; } && sbt -J-XX:ReservedCodeCacheSize=128m ++$TRAVIS_SCALA_VERSION
 - find . -name "*.log" -exec ./scripts/cat-log.sh {} \;
+# run tests
+- sbt test
 before_cache:
 - find $HOME/.ivy2 -name "ivydata-*.properties" -print -delete
 - find $HOME/.sbt  -name "*.lock"               -print -delete
