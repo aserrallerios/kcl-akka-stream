@@ -7,6 +7,7 @@ package aserralle.akka.stream.kcl
 import java.nio.ByteBuffer
 import java.util.Date
 import java.util.concurrent.Semaphore
+import aserralle.akka.stream.kcl.Errors.BackpressureTimeout
 
 import akka.stream.KillSwitches
 import akka.stream.scaladsl.Keep
@@ -22,12 +23,7 @@ import com.amazonaws.services.kinesis.clientlibrary.lib.worker.{
   ShutdownReason,
   Worker
 }
-import com.amazonaws.services.kinesis.clientlibrary.types.{
-  ExtendedSequenceNumber,
-  InitializationInput,
-  ProcessRecordsInput,
-  ShutdownInput
-}
+import com.amazonaws.services.kinesis.clientlibrary.types._
 import com.amazonaws.services.kinesis.model.Record
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
@@ -37,6 +33,8 @@ import org.scalatest.{Matchers, WordSpecLike}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
+import scala.util.Failure
 
 class KinesisWorkerSourceSourceSpec
     extends WordSpecLike
@@ -113,10 +111,61 @@ class KinesisWorkerSourceSourceSpec
         verify(worker).run()
       }
     }
+
+    "not drop messages in case of back-pressure" in new KinesisWorkerContext
+    with TestData {
+      recordProcessor.initialize(initializationInput)
+      for (i <- 1 to 10) { // 10 is a buffer size
+        val record = org.mockito.Mockito.mock(classOf[Record])
+        when(record.getSequenceNumber).thenReturn(i.toString)
+        recordProcessor.processRecords(
+          recordsInput.withRecords(List(record).asJava))
+      }
+      //expect to consume all 10
+      for (_ <- 1 to 10) sinkProbe.requestNext()
+
+      //send another batch to exceed the queue size
+      Future {
+        for (i <- 1 to 25) { // 10 is a buffer size
+          val record = org.mockito.Mockito.mock(classOf[Record])
+          when(record.getSequenceNumber).thenReturn(i.toString)
+          recordProcessor.processRecords(
+            recordsInput.withRecords(List(record).asJava))
+        }
+      }
+
+      //expect to consume all 25 with slow consumer
+      for (_ <- 1 to 25) {
+        sinkProbe.requestNext()
+        Thread.sleep(100)
+      }
+
+      killSwitch.shutdown()
+      sinkProbe.expectComplete()
+    }
+
+    "stop the stream when back pressure timeout elapsed" in new KinesisWorkerContext(
+      backpressureTimeout = 100.milliseconds) with TestData {
+      recordProcessor.initialize(initializationInput)
+      //Fast consumer sends 25 messages into 10 items queue size
+      for (i <- 1 to 25) { // 10 is a buffer size
+        val record = org.mockito.Mockito.mock(classOf[Record])
+        when(record.getSequenceNumber).thenReturn(i.toString)
+        recordProcessor.processRecords(
+          recordsInput.withRecords(List(record).asJava))
+      }
+
+      Await.ready(watch, 5.seconds)
+      val Failure(exception) = watch.value.get
+      assert(exception == BackpressureTimeout)
+
+      killSwitch.shutdown()
+    }
   }
 
   private abstract class KinesisWorkerContext(
-      workerFailure: Option[Throwable] = None) {
+      workerFailure: Option[Throwable] = None,
+      backpressureTimeout: FiniteDuration = 1.minute) {
     protected val worker = org.mockito.Mockito.mock(classOf[Worker])
     val lock = new Semaphore(0)
     when(worker.run()).thenAnswer(new Answer[Unit] {
@@ -138,7 +187,8 @@ class KinesisWorkerSourceSourceSpec
       KinesisWorkerSource(
         workerBuilder,
         KinesisWorkerSourceSettings(bufferSize = 10,
-                                    terminateStreamGracePeriod = 1.second))
+                                    terminateStreamGracePeriod = 1.second,
+                                    backpressureTimeout = backpressureTimeout))
         .viaMat(KillSwitches.single)(Keep.right)
         .watchTermination()(Keep.both)
         .toMat(TestSink.probe)(Keep.both)
@@ -175,6 +225,37 @@ class KinesisWorkerSourceSourceSpec
   }
 
   "KinesisWorker checkpoint Flow " must {
+
+    "checkpoint batch of records with same sequence number" in new KinesisWorkerCheckpointContext {
+      val recordProcessor = new IRecordProcessor(_ => (), 1.second)
+
+      val checkpointerShard1 =
+        org.mockito.Mockito.mock(classOf[IRecordProcessorCheckpointer])
+      var latestRecordShard1: Record = _
+      for (i <- 1 to 3) {
+        val record = org.mockito.Mockito.mock(classOf[UserRecord])
+        when(record.getSequenceNumber).thenReturn("1")
+        when(record.getSubSequenceNumber).thenReturn(i.toLong)
+        sourceProbe.sendNext(
+          new CommittableRecord(
+            "shard-1",
+            org.mockito.Mockito.mock(classOf[ExtendedSequenceNumber]),
+            1L,
+            record,
+            recordProcessor,
+            checkpointerShard1
+          )
+        )
+        latestRecordShard1 = record
+      }
+
+      for (_ <- 1 to 3) sinkProbe.requestNext()
+
+      eventually(verify(checkpointerShard1).checkpoint(latestRecordShard1))
+
+      sourceProbe.sendComplete()
+      sinkProbe.expectComplete()
+    }
 
     "checkpoint batch of records of different shards" in new KinesisWorkerCheckpointContext {
       val recordProcessor = new IRecordProcessor(_ => (), 1.second)

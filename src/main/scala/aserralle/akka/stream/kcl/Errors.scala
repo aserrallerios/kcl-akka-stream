@@ -12,4 +12,6 @@ object Errors {
   case class WorkerUnexpectedShutdown(cause: Throwable)
       extends KinesisWorkerSourceError
 
+  case object BackpressureTimeout extends KinesisWorkerSourceError
+
 }

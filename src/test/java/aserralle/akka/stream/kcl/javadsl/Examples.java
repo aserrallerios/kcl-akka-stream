@@ -53,7 +53,7 @@ public class Examples {
     };
     final KinesisWorkerSourceSettings workerSettings = KinesisWorkerSourceSettings.create(
             1000,
-            FiniteDuration.apply(1L, TimeUnit.SECONDS));
+            FiniteDuration.apply(1L, TimeUnit.SECONDS), FiniteDuration.apply(1L, TimeUnit.MINUTES));
     //#worker-settings
 
     //#worker-source
