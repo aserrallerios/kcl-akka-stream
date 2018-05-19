@@ -4,6 +4,8 @@
 
 package aserralle.akka.stream.kcl.scaladsl
 
+import java.util.concurrent.Semaphore
+
 import akka.stream.Supervision.{Resume, Stop}
 import akka.stream._
 import akka.stream.scaladsl.{Flow, GraphDSL, Keep, Sink, Source, Zip}
@@ -41,15 +43,19 @@ object KinesisWorkerSource {
       .watchTermination()(Keep.both)
       .mapMaterializedValue {
         case (queue, watch) =>
+          val semaphore = new Semaphore(1, true)
           val worker = workerBuilder(
             new IRecordProcessorFactory {
               override def createProcessor(): IRecordProcessor =
                 new IRecordProcessor(
-                  record =>
+                  record => {
+                    semaphore.acquire(1)
                     (Exception.nonFatalCatch either Await.result(
                       queue.offer(record),
                       settings.backpressureTimeout) left)
-                      .foreach(_ => queue.fail(BackpressureTimeout)),
+                      .foreach(_ => queue.fail(BackpressureTimeout))
+                    semaphore.release()
+                  },
                   settings.terminateStreamGracePeriod
                 )
             }
