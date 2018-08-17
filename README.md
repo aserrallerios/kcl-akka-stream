@@ -85,11 +85,11 @@ In order to use the Flow/Sink you must provide additional checkpoint settings:
 val checkpointSettings = KinesisWorkerCheckpointSettings(100, 30 seconds)
 
 KinesisWorkerSource(builder, workerSourceSettings)
-  .via(KinesisWorker.checkpointRecordsFlow(checkpointSettings))
+  .via(KinesisWorkerSource.checkpointRecordsFlow(checkpointSettings))
   .to(Sink.ignore)
 
 KinesisWorkerSource(builder, workerSourceSettings).to(
-  KinesisWorker.checkpointRecordsSink(checkpointSettings))
+  KinesisWorkerSource.checkpointRecordsSink(checkpointSettings))
 ```
 
 Note that checkpointer Flow may not maintain input order of records of different shards.
