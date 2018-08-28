@@ -202,7 +202,7 @@ class KinesisWorkerSourceSourceSpec
 
       Await.ready(watch, 5.seconds)
       val Failure(exception) = watch.value.get
-      assert(exception == BackpressureTimeout)
+      assert(exception.getCause.getMessage.contains("Futures timed out after [100 milliseconds]"))
 
       killSwitch.shutdown()
     }

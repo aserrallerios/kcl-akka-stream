@@ -4,14 +4,8 @@
 
 package aserralle.akka.stream.kcl
 
-import scala.util.control.NoStackTrace
-
 object Errors {
+  case class WorkerUnexpectedShutdown(cause: Throwable) extends Throwable(cause)
 
-  sealed trait KinesisWorkerSourceError extends NoStackTrace
-  case class WorkerUnexpectedShutdown(cause: Throwable)
-      extends KinesisWorkerSourceError
-
-  case object BackpressureTimeout extends KinesisWorkerSourceError
-
+  case class BackpressureTimeout(cause: Throwable) extends Throwable(cause)
 }

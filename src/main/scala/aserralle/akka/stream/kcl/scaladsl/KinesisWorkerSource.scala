@@ -53,7 +53,7 @@ object KinesisWorkerSource {
                     (Exception.nonFatalCatch either Await.result(
                       queue.offer(record),
                       settings.backpressureTimeout) left)
-                      .foreach(_ => queue.fail(BackpressureTimeout))
+                      .foreach(err => queue.fail(BackpressureTimeout(err)))
                     semaphore.release()
                   },
                   settings.terminateStreamGracePeriod
