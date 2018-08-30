@@ -5,8 +5,11 @@
 package aserralle.akka.stream.kcl
 
 object Errors {
-  case class WorkerUnexpectedShutdown(cause: Throwable)
-      extends Throwable(cause)
+  sealed class KinesisWorkerSourceError(err: Throwable) extends Throwable(err)
 
-  case class BackpressureTimeout(cause: Throwable) extends Throwable(cause)
+  case class WorkerUnexpectedShutdown(cause: Throwable)
+      extends KinesisWorkerSourceError(cause)
+
+  case class BackpressureTimeout(cause: Throwable)
+      extends KinesisWorkerSourceError(cause)
 }
