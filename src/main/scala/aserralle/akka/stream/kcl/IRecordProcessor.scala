@@ -53,6 +53,7 @@ private[kcl] class IRecordProcessor(
     latestCheckpointer = Some(shutdownInput.getCheckpointer)
     shutdownInput.getShutdownReason match {
       case ShutdownReason.TERMINATE =>
+        shutdownInput.getCheckpointer.checkpoint()
         Thread.sleep(terminateStreamGracePeriod.toMillis)
       case ShutdownReason.ZOMBIE => ()
       case ShutdownReason.REQUESTED => ()
