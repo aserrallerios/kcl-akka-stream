@@ -3,11 +3,11 @@ import sbt._, Keys._
 object Dependencies {
 
   val AkkaVersion = sys.env.get("AKKA_SERIES") match {
-    case Some("2.5") => "2.5.11"
+    case Some("2.5") => "2.5.18"
     case _ => "2.4.20"
   }
 
-  val AwsSdkVersion = "1.11.311"
+  val AwsSdkVersion = "2.1.4"
 
   val Common = Seq(
     libraryDependencies ++= Seq(
@@ -21,8 +21,8 @@ object Dependencies {
 
   val Kinesis = Seq(
     libraryDependencies ++= Seq(
-      "com.amazonaws" % "aws-java-sdk-kinesis" % AwsSdkVersion % Provided, // ApacheV2
-      "com.amazonaws" % "amazon-kinesis-client" % "1.9.0" % Provided, // Amazon Software License
+      "software.amazon.awssdk" % "kinesis" % AwsSdkVersion % Provided, // Amazon Software License
+      "software.amazon.kinesis" % "amazon-kinesis-client" % "2.0.5" % Provided, // Amazon Software License
       "org.mockito" % "mockito-core" % "2.7.11" % Test // MIT
     )
   )
