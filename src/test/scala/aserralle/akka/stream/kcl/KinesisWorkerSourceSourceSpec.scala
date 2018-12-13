@@ -5,7 +5,6 @@
 package aserralle.akka.stream.kcl
 
 import java.nio.ByteBuffer
-import java.time.Instant
 import java.util.Date
 import java.util.concurrent.{CountDownLatch, Semaphore}
 
@@ -15,17 +14,22 @@ import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
 import aserralle.akka.stream.kcl.Errors.WorkerUnexpectedShutdown
 import aserralle.akka.stream.kcl.scaladsl.KinesisWorkerSource
-import io.reactivex.Scheduler.Worker
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.{
+  IRecordProcessorCheckpointer,
+  v2
+}
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.{
+  ShutdownReason,
+  Worker
+}
+import com.amazonaws.services.kinesis.clientlibrary.types._
+import com.amazonaws.services.kinesis.model.Record
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest.concurrent.Eventually
 import org.scalatest.{Matchers, WordSpecLike}
-import software.amazon.awssdk.services.kinesis.model.EncryptionType
-import software.amazon.kinesis.lifecycle.events.{InitializationInput, ProcessRecordsInput}
-import software.amazon.kinesis.processor.{RecordProcessorCheckpointer, ShardRecordProcessor, ShardRecordProcessorFactory}
-import software.amazon.kinesis.retrieval.KinesisClientRecord
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
@@ -218,13 +222,13 @@ class KinesisWorkerSourceSourceSpec
 
     val semaphore = new Semaphore(0)
 
-    var recordProcessorFactory: ShardRecordProcessorFactory = _
-    var recordProcessor: ShardRecordProcessor = _
-    var recordProcessor2: ShardRecordProcessor = _
-    val workerBuilder = { x: ShardRecordProcessorFactory =>
+    var recordProcessorFactory: IRecordProcessorFactory = _
+    var recordProcessor: v2.IRecordProcessor = _
+    var recordProcessor2: v2.IRecordProcessor = _
+    val workerBuilder = { x: IRecordProcessorFactory =>
       recordProcessorFactory = x
-      recordProcessor = x.shardRecordProcessor()
-      recordProcessor2 = x.shardRecordProcessor()
+      recordProcessor = x.createProcessor()
+      recordProcessor2 = x.createProcessor()
       semaphore.release()
       worker
     }
@@ -249,21 +253,19 @@ class KinesisWorkerSourceSourceSpec
 
   private trait TestData {
     protected val checkpointer =
-      org.mockito.Mockito.mock(classOf[RecordProcessorCheckpointer])
+      org.mockito.Mockito.mock(classOf[IRecordProcessorCheckpointer])
 
     val initializationInput =
       new InitializationInput()
         .withShardId("shardId")
         .withExtendedSequenceNumber(ExtendedSequenceNumber.AT_TIMESTAMP)
     val record =
-      new KinesisClientRecord.KinesisClientRecordBuilder()
-        .approximateArrivalTimestamp(Instant.now)
-        .encryptionType(EncryptionType.NONE)
-        .partitionKey("partitionKey")
-        .sequenceNumber("sequenceNum")
-        .data(ByteBuffer.wrap(Array[Byte](1)))
-        .build()
-
+      new Record()
+        .withApproximateArrivalTimestamp(new Date())
+        .withEncryptionType("encryption")
+        .withPartitionKey("partitionKey")
+        .withSequenceNumber("sequenceNum")
+        .withData(ByteBuffer.wrap(Array[Byte](1)))
     val recordsInput =
       new ProcessRecordsInput()
         .withCheckpointer(checkpointer)
