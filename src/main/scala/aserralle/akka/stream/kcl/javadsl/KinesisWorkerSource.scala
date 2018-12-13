@@ -9,23 +9,23 @@ import java.util.concurrent.Executor
 import akka.NotUsed
 import aserralle.akka.stream.kcl.{CommittableRecord, scaladsl, _}
 import akka.stream.javadsl.{Flow, Sink, Source}
-import io.reactivex.Scheduler.Worker
-import software.amazon.kinesis.coordinator.Scheduler
-import software.amazon.kinesis.processor.ShardRecordProcessorFactory
+import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory
+import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker
+import com.amazonaws.services.kinesis.model.Record
 
 import scala.concurrent.ExecutionContext
 
 object KinesisWorkerSource {
 
   abstract class WorkerBuilder {
-    def build(r: ShardRecordProcessorFactory): Scheduler
+    def build(r: IRecordProcessorFactory): Worker
   }
 
   def create(
       workerBuilder: WorkerBuilder,
       settings: KinesisWorkerSourceSettings,
       workerExecutor: Executor
-  ): Source[CommittableRecord, Scheduler] =
+  ): Source[CommittableRecord, Worker] =
     scaladsl.KinesisWorkerSource
       .apply(workerBuilder.build, settings)(
         ExecutionContext.fromExecutor(workerExecutor))

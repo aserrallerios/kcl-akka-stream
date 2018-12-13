@@ -7,9 +7,11 @@ package aserralle.akka.stream.kcl
 import akka.Done
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason
-import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord
+import com.amazonaws.services.kinesis.clientlibrary.types.{
+  ExtendedSequenceNumber,
+  UserRecord
+}
 import com.amazonaws.services.kinesis.model.Record
-import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber
 
 import scala.concurrent.{ExecutionContext, Future}
 
