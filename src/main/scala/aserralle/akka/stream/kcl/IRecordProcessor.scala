@@ -4,14 +4,10 @@
 
 package aserralle.akka.stream.kcl
 
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason
-import com.amazonaws.services.kinesis.clientlibrary.types.{
-  ExtendedSequenceNumber,
-  InitializationInput,
-  ProcessRecordsInput,
-  ShutdownInput
-}
+import software.amazon.kinesis.lifecycle.{ShutdownInput, ShutdownReason}
+import software.amazon.kinesis.lifecycle.events._
+import software.amazon.kinesis.processor.{RecordProcessorCheckpointer, ShardRecordProcessor}
+import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
@@ -21,42 +17,55 @@ private[kcl] class IRecordProcessor(
     callback: CommittableRecord => Unit,
     terminateStreamGracePeriod: FiniteDuration
 )(implicit executionContext: ExecutionContext)
-    extends com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessor {
+    extends ShardRecordProcessor {
+
   private var shardId: String = _
   private var extendedSequenceNumber: ExtendedSequenceNumber = _
+
   var shutdown: Option[ShutdownReason] = None
-  var latestCheckpointer: Option[IRecordProcessorCheckpointer] = None
+  var latestCheckpointer: Option[RecordProcessorCheckpointer] = None
 
   override def initialize(initializationInput: InitializationInput): Unit = {
-    shardId = initializationInput.getShardId
-    extendedSequenceNumber = initializationInput.getExtendedSequenceNumber
+    shardId = initializationInput.shardId()
+    extendedSequenceNumber = initializationInput.extendedSequenceNumber()
   }
 
   override def processRecords(processRecordsInput: ProcessRecordsInput): Unit = {
-    latestCheckpointer = Some(processRecordsInput.getCheckpointer)
-    processRecordsInput.getRecords.asScala.foreach { record =>
+    val checkpointer = processRecordsInput.checkpointer
+    latestCheckpointer = Some(checkpointer)
+    processRecordsInput.records().asScala.foreach { record =>
       callback(
         new CommittableRecord(
           shardId,
           extendedSequenceNumber,
-          processRecordsInput.getMillisBehindLatest,
+          processRecordsInput.millisBehindLatest(),
           record,
           recordProcessor = this,
-          processRecordsInput.getCheckpointer
+          checkpointer
         )
       )
     }
   }
 
-  override def shutdown(shutdownInput: ShutdownInput): Unit = {
-    shutdown = Some(shutdownInput.getShutdownReason)
-    latestCheckpointer = Some(shutdownInput.getCheckpointer)
-    shutdownInput.getShutdownReason match {
-      case ShutdownReason.TERMINATE =>
-        Thread.sleep(terminateStreamGracePeriod.toMillis)
-      case ShutdownReason.ZOMBIE => ()
-      case ShutdownReason.REQUESTED => ()
-    }
+  override def leaseLost(leaseLostInput: LeaseLostInput): Unit = {}
+
+  override def shardEnded(shardEndedInput: ShardEndedInput): Unit = {}
+
+  override def shutdownRequested(shutdownInput: ShutdownRequestedInput): Unit = {
+
+    // we need to checkpoint, but if we do it immediately any records still
+    // in flight may get lost
+    latestCheckpointer = Some(shutdownInput.checkpointer)
   }
+
+//  override def shutdown(shutdownInput: ShutdownInput): Unit = {
+//    shutdown = Some(shutdownInput.shutdownReason)
+//    shutdownInput.shutdownReason match {
+//      case ShutdownReason.TERMINATE =>
+//        Thread.sleep(terminateStreamGracePeriod.toMillis)
+//      case ShutdownReason.ZOMBIE => ()
+//      case ShutdownReason.REQUESTED => ()
+//    }
+//  }
 
 }

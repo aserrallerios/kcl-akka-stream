@@ -5,10 +5,9 @@
 package aserralle.akka.stream.kcl
 
 import akka.Done
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.IRecordProcessorCheckpointer
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason
-import com.amazonaws.services.kinesis.clientlibrary.types.UserRecord
-import com.amazonaws.services.kinesis.model.Record
+import software.amazon.kinesis.lifecycle.ShutdownReason
+import software.amazon.kinesis.processor.RecordProcessorCheckpointer
+import software.amazon.kinesis.retrieval.KinesisClientRecord
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -17,12 +16,13 @@ class CommittableRecord(
     val shardId: String,
     val recordProcessorStartingSequenceNumber: ExtendedSequenceNumber,
     val millisBehindLatest: Long,
-    val record: Record,
+    val record: KinesisClientRecord,
     recordProcessor: IRecordProcessor,
-    checkpointer: IRecordProcessorCheckpointer
+    checkpointer: RecordProcessorCheckpointer
 )(implicit executor: ExecutionContext) {
 
-  val sequenceNumber: String = record.getSequenceNumber
+  val sequenceNumber: String = record.sequenceNumber()
+  val subSequenceNumber: Long = record.subSequenceNumber()
 
   def recordProcessorShutdownReason(): Option[ShutdownReason] =
     recordProcessor.shutdown
@@ -30,7 +30,7 @@ class CommittableRecord(
     recordProcessorShutdownReason().isEmpty
   def tryToCheckpoint(): Future[Done] =
     Future {
-      checkpointer.checkpoint(record)
+      checkpointer.checkpoint(sequenceNumber, subSequenceNumber)
       Done
     }
 
@@ -43,9 +43,6 @@ object CommittableRecord {
   // same sequence number but will differ by subsequence number
   implicit val orderBySequenceNumber: Ordering[CommittableRecord] =
     Ordering[(String, Long)].on(cr ⇒
-      (cr.sequenceNumber, cr.record match {
-        case ur: UserRecord ⇒ ur.getSubSequenceNumber
-        case _ ⇒ 0
-      }))
+      (cr.sequenceNumber, cr.subSequenceNumber))
 
 }
