@@ -9,17 +9,21 @@ import akka.actor.ActorSystem;
 import akka.stream.ActorMaterializer;
 import akka.stream.javadsl.Flow;
 import akka.stream.javadsl.Source;
+import aserralle.akka.stream.kcl.CommittableRecord;
 import aserralle.akka.stream.kcl.KinesisWorkerCheckpointSettings;
 import aserralle.akka.stream.kcl.KinesisWorkerSourceSettings;
-import aserralle.akka.stream.kcl.CommittableRecord;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.services.kinesis.AmazonKinesisAsync;
-import com.amazonaws.services.kinesis.AmazonKinesisAsyncClientBuilder;
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.KinesisClientLibConfiguration;
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker;
-import com.amazonaws.services.kinesis.model.Record;
 import scala.concurrent.duration.FiniteDuration;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.kinesis.KinesisAsyncClient;
+import software.amazon.kinesis.common.ConfigsBuilder;
+import software.amazon.kinesis.coordinator.Scheduler;
+import software.amazon.kinesis.processor.ShardRecordProcessorFactory;
+import software.amazon.kinesis.retrieval.KinesisClientRecord;
+import software.amazon.kinesis.retrieval.RetrievalConfig;
+import software.amazon.kinesis.retrieval.polling.SimpleRecordsFetcherFactory;
+import software.amazon.kinesis.retrieval.polling.SynchronousBlockingRetrievalFactory;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -28,7 +32,10 @@ import java.util.concurrent.TimeUnit;
 public class Examples {
 
     //#init-client
-    final AmazonKinesisAsync amazonKinesisAsync = AmazonKinesisAsyncClientBuilder.defaultClient();
+    Region region = Region.AWS_GLOBAL;
+    KinesisAsyncClient kinesisClient = KinesisAsyncClient.builder().region(region).build();
+    DynamoDbAsyncClient dynamoClient = DynamoDbAsyncClient.builder().region(region).build();
+    CloudWatchAsyncClient cloudWatchClient = CloudWatchAsyncClient.builder().region(region).build();
     //#init-client
 
     //#init-system
@@ -39,18 +46,46 @@ public class Examples {
     //#worker-settings
     final KinesisWorkerSource.WorkerBuilder workerBuilder = new KinesisWorkerSource.WorkerBuilder() {
         @Override
-        public Worker build(IRecordProcessorFactory recordProcessorFactory) {
-            return new Worker.Builder()
-                    .recordProcessorFactory(recordProcessorFactory)
-                    .config(new KinesisClientLibConfiguration(
+        public Scheduler build(ShardRecordProcessorFactory recordProcessorFactory) {
+
+            String streamName = "myStreamName";
+
+            ConfigsBuilder configsBuilder =
+                    new ConfigsBuilder(
+                            streamName,
                             "myApp",
-                            "myStreamName",
-                            DefaultAWSCredentialsProviderChain.getInstance(),
-                            "workerId"
-                    ))
-                    .build();
+                            kinesisClient,
+                            dynamoClient,
+                            cloudWatchClient,
+                            "workerId",
+                            recordProcessorFactory);
+
+            //#Fan-out retrievalConfig - will incur additional AWS costs
+            RetrievalConfig fanoutRetrievalConfig =
+                    configsBuilder.retrievalConfig();
+            //#Fan-out retrievalConfig
+
+            //#Non-fan-out retrievalConfig i.e. equivalent of KCL 1 client
+            RetrievalConfig retrievalConfig =
+                    configsBuilder.retrievalConfig().retrievalFactory(
+                            new SynchronousBlockingRetrievalFactory(
+                                    streamName,
+                                    kinesisClient,
+                                    new SimpleRecordsFetcherFactory(),
+                                    1000));
+            //#Non-fan-out retrievalConfig
+
+            return new Scheduler(
+                    configsBuilder.checkpointConfig(),
+                    configsBuilder.coordinatorConfig(),
+                    configsBuilder.leaseManagementConfig(),
+                    configsBuilder.lifecycleConfig(),
+                    configsBuilder.metricsConfig(),
+                    configsBuilder.processorConfig(),
+                    retrievalConfig);
         }
     };
+
     final KinesisWorkerSourceSettings workerSettings = KinesisWorkerSourceSettings.create(
             1000,
             FiniteDuration.apply(1L, TimeUnit.SECONDS), FiniteDuration.apply(1L, TimeUnit.MINUTES));
@@ -58,12 +93,15 @@ public class Examples {
 
     //#worker-source
     final Executor workerExecutor = Executors.newFixedThreadPool(100);
-    final Source<CommittableRecord, Worker> workerSource = KinesisWorkerSource.create(workerBuilder, workerSettings, workerExecutor );
+    final Source<CommittableRecord, Scheduler> workerSource =
+        KinesisWorkerSource.create(workerBuilder, workerSettings, workerExecutor );
     //#worker-source
 
     //#checkpoint
-    final KinesisWorkerCheckpointSettings checkpointSettings = KinesisWorkerCheckpointSettings.create(1000, FiniteDuration.apply(30L, TimeUnit.SECONDS));
-    final Flow<CommittableRecord, Record, NotUsed> checkpointFlow = KinesisWorkerSource.checkpointRecordsFlow(checkpointSettings);
+    final KinesisWorkerCheckpointSettings checkpointSettings =
+            KinesisWorkerCheckpointSettings.create(1000, FiniteDuration.apply(30L, TimeUnit.SECONDS));
+    final Flow<CommittableRecord, KinesisClientRecord, NotUsed> checkpointFlow =
+        KinesisWorkerSource.checkpointRecordsFlow(checkpointSettings);
     //#checkpoint
 
 }

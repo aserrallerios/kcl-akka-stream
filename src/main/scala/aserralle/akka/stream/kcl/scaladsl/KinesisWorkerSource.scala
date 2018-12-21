@@ -10,19 +10,16 @@ import akka.stream.Supervision.{Resume, Stop}
 import akka.stream._
 import akka.stream.scaladsl.{Flow, GraphDSL, Keep, Sink, Source, Zip}
 import akka.{Done, NotUsed}
-import aserralle.akka.stream.kcl.Errors.{
-  BackpressureTimeout,
-  WorkerUnexpectedShutdown
-}
+import aserralle.akka.stream.kcl.Errors.{BackpressureTimeout, WorkerUnexpectedShutdown}
 import aserralle.akka.stream.kcl.{
   CommittableRecord,
-  IRecordProcessor,
   KinesisWorkerCheckpointSettings,
-  KinesisWorkerSourceSettings
-}
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker
-import com.amazonaws.services.kinesis.model.Record
+  KinesisWorkerSourceSettings,
+  ShardProcessor}
+import software.amazon.kinesis.coordinator.Scheduler
+import software.amazon.kinesis.exceptions.ShutdownException
+import software.amazon.kinesis.processor.ShardRecordProcessorFactory
+import software.amazon.kinesis.retrieval.KinesisClientRecord
 
 import scala.collection.immutable
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -32,32 +29,30 @@ import scala.util.{Failure, Success}
 object KinesisWorkerSource {
 
   def apply(
-      workerBuilder: IRecordProcessorFactory => Worker,
-      settings: KinesisWorkerSourceSettings =
-        KinesisWorkerSourceSettings.defaultInstance
+    workerBuilder: ShardRecordProcessorFactory => Scheduler,
+    settings: KinesisWorkerSourceSettings =
+      KinesisWorkerSourceSettings.defaultInstance
   )(implicit workerExecutor: ExecutionContext)
-    : Source[CommittableRecord, Worker] =
+    : Source[CommittableRecord, Scheduler] =
     Source
       .queue[CommittableRecord](settings.bufferSize,
-                                OverflowStrategy.backpressure)
+      OverflowStrategy.backpressure)
       .watchTermination()(Keep.both)
       .mapMaterializedValue {
         case (queue, watch) =>
           val semaphore = new Semaphore(1, true)
           val worker = workerBuilder(
-            new IRecordProcessorFactory {
-              override def createProcessor(): IRecordProcessor =
-                new IRecordProcessor(
-                  record => {
-                    semaphore.acquire(1)
-                    (Exception.nonFatalCatch either Await.result(
-                      queue.offer(record),
-                      settings.backpressureTimeout) left)
-                      .foreach(err => queue.fail(BackpressureTimeout(err)))
-                    semaphore.release()
-                  },
-                  settings.terminateStreamGracePeriod
-                )
+            () => {
+              new ShardProcessor(
+                record => {
+                  semaphore.acquire(1)
+                  (Exception.nonFatalCatch either Await.result(
+                    queue.offer(record),
+                    settings.backpressureTimeout) left)
+                    .foreach(err => queue.fail(BackpressureTimeout(err)))
+                  semaphore.release()
+                },
+                settings.terminateStreamGracePeriod)
             }
           )
 
@@ -71,9 +66,9 @@ object KinesisWorkerSource {
       }
 
   def checkpointRecordsFlow(
-      settings: KinesisWorkerCheckpointSettings =
-        KinesisWorkerCheckpointSettings.defaultInstance
-  ): Flow[CommittableRecord, Record, NotUsed] =
+    settings: KinesisWorkerCheckpointSettings =
+      KinesisWorkerCheckpointSettings.defaultInstance
+  ): Flow[CommittableRecord, KinesisClientRecord, NotUsed] =
     Flow[CommittableRecord]
       .groupBy(MAX_KINESIS_SHARDS, _.shardId)
       .groupedWithin(settings.maxBatchSize, settings.maxBatchWait)
@@ -83,7 +78,7 @@ object KinesisWorkerSource {
         val `{` =
           b.add(scaladsl.Broadcast[immutable.Seq[CommittableRecord]](2))
         val `}` = b.add(Zip[Done, immutable.Seq[CommittableRecord]])
-        val `=` = b.add(Flow[Record])
+        val `=` = b.add(Flow[KinesisClientRecord])
 
         `{`.out(0)
           .map(_.max)
@@ -98,14 +93,14 @@ object KinesisWorkerSource {
       })
       .mergeSubstreams
       .withAttributes(ActorAttributes.supervisionStrategy {
-        case _: com.amazonaws.services.kinesis.clientlibrary.exceptions.ShutdownException =>
+        case _: ShutdownException =>
           Resume
         case _ => Stop
       })
 
   def checkpointRecordsSink(
-      settings: KinesisWorkerCheckpointSettings =
-        KinesisWorkerCheckpointSettings.defaultInstance
+    settings: KinesisWorkerCheckpointSettings =
+      KinesisWorkerCheckpointSettings.defaultInstance
   ): Sink[CommittableRecord, NotUsed] =
     checkpointRecordsFlow(settings).to(Sink.ignore)
 
