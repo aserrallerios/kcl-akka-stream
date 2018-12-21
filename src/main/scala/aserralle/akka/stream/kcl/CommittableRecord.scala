@@ -32,7 +32,7 @@ class CommittableRecord(
 
   def tryToCheckpoint(): Future[Done] =
     Future {
-      checkpointer.checkpoint()
+      checkpointer.checkpoint(sequenceNumber, subSequenceNumber)
       Done
     }
 }
