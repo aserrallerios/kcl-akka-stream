@@ -6,10 +6,7 @@ package aserralle.akka.stream.kcl
 
 import software.amazon.kinesis.lifecycle.ShutdownReason
 import software.amazon.kinesis.lifecycle.events._
-import software.amazon.kinesis.processor.{
-  RecordProcessorCheckpointer,
-  ShardRecordProcessor
-}
+import software.amazon.kinesis.processor.ShardRecordProcessor
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber
 
 import scala.collection.JavaConverters._
@@ -50,20 +47,18 @@ private[kcl] class ShardProcessor(
   override def leaseLost(leaseLostInput: LeaseLostInput): Unit = {}
 
   override def shardEnded(shardEndedInput: ShardEndedInput): Unit = {
-    manageShutdown(shardEndedInput.checkpointer, ShutdownReason.SHARD_END)
+    // We need to checkpoint, but if we do it immediately any records still
+    // in flight may get lost, so we wait for the grace period
+    shutdown = Some(ShutdownReason.SHARD_END)
+    Thread.sleep(terminateStreamGracePeriod.toMillis)
+    shardEndedInput.checkpointer.checkpoint()
   }
 
   override def shutdownRequested(shutdownInput: ShutdownRequestedInput): Unit = {
-    manageShutdown(shutdownInput.checkpointer, ShutdownReason.REQUESTED)
-  }
-
-  private def manageShutdown(checkpointer: RecordProcessorCheckpointer,
-                             shutdownReason: ShutdownReason): Unit = {
-    // We need to checkpoint, but if we do it immediately any records still
-    // in flight may get lost, so we wait for the grace period
+    // We don't checkpoint at this point as we assume the
+    // standard mechanism will checkpoint when required
+    shutdown = Some(ShutdownReason.REQUESTED)
     Thread.sleep(terminateStreamGracePeriod.toMillis)
-    shutdown = Some(shutdownReason)
-    checkpointer.checkpoint()
   }
 
 }
