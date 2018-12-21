@@ -21,8 +21,16 @@ import org.scalatest.{Matchers, WordSpecLike}
 import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.kinesis.model.Record
 import software.amazon.kinesis.coordinator.Scheduler
-import software.amazon.kinesis.lifecycle.events.{InitializationInput, ProcessRecordsInput, ShutdownRequestedInput}
-import software.amazon.kinesis.processor.{RecordProcessorCheckpointer, ShardRecordProcessor, ShardRecordProcessorFactory}
+import software.amazon.kinesis.lifecycle.events.{
+  InitializationInput,
+  ProcessRecordsInput,
+  ShutdownRequestedInput
+}
+import software.amazon.kinesis.processor.{
+  RecordProcessorCheckpointer,
+  ShardRecordProcessor,
+  ShardRecordProcessorFactory
+}
 import software.amazon.kinesis.retrieval.KinesisClientRecord
 import software.amazon.kinesis.retrieval.kpl.ExtendedSequenceNumber
 
@@ -46,7 +54,8 @@ class KinesisWorkerSourceSourceSpec
       recordProcessor.processRecords(recordsInput)
 
       val producedRecord = sinkProbe.requestNext()
-      producedRecord.recordProcessorStartingSequenceNumber shouldBe initializationInput.extendedSequenceNumber()
+      producedRecord.recordProcessorStartingSequenceNumber shouldBe initializationInput
+        .extendedSequenceNumber()
       producedRecord.shardId shouldBe initializationInput.shardId()
 //      producedRecord.millisBehindLatest shouldBe recordsInput.getMillisBehindLatest
       producedRecord.record shouldBe record
@@ -65,7 +74,8 @@ class KinesisWorkerSourceSourceSpec
       recordProcessor.processRecords(recordsInput)
 
       var producedRecord = sinkProbe.requestNext()
-      producedRecord.recordProcessorStartingSequenceNumber shouldBe initializationInput.extendedSequenceNumber()
+      producedRecord.recordProcessorStartingSequenceNumber shouldBe initializationInput
+        .extendedSequenceNumber()
       producedRecord.shardId shouldBe initializationInput.shardId()
 //      producedRecord.millisBehindLatest shouldBe recordsInput.getMillisBehindLatest
       producedRecord.record shouldBe record
@@ -76,7 +86,8 @@ class KinesisWorkerSourceSourceSpec
       newRecordProcessor.processRecords(recordsInput)
 
       producedRecord = sinkProbe.requestNext()
-      producedRecord.recordProcessorStartingSequenceNumber shouldBe initializationInput.extendedSequenceNumber()
+      producedRecord.recordProcessorStartingSequenceNumber shouldBe initializationInput
+        .extendedSequenceNumber()
       producedRecord.shardId shouldBe initializationInput.shardId()
 //      producedRecord.millisBehindLatest shouldBe recordsInput.getMillisBehindLatest
       producedRecord.record shouldBe record
@@ -168,7 +179,8 @@ class KinesisWorkerSourceSourceSpec
           for (i <- 1 to 25) { // 10 is a buffer size
             val record = org.mockito.Mockito.mock(classOf[KinesisClientRecord])
             when(record.sequenceNumber).thenReturn(i.toString)
-            rp.processRecords(recordsInput.toBuilder.records(List(record).asJava).build())
+            rp.processRecords(
+              recordsInput.toBuilder.records(List(record).asJava).build())
           }
         }
       }
@@ -258,14 +270,16 @@ class KinesisWorkerSourceSourceSpec
       org.mockito.Mockito.mock(classOf[RecordProcessorCheckpointer])
 
     def initializationInput(shardId: String) =
-      InitializationInput.builder()
+      InitializationInput
+        .builder()
         .shardId(shardId)
         .extendedSequenceNumber(ExtendedSequenceNumber.AT_TIMESTAMP)
         .build()
 
     val record =
       KinesisClientRecord.fromRecord(
-        Record.builder()
+        Record
+          .builder()
           .approximateArrivalTimestamp(Instant.now())
           .encryptionType("encryption")
           .partitionKey("partitionKey")
@@ -274,7 +288,8 @@ class KinesisWorkerSourceSourceSpec
           .build())
 
     val recordsInput =
-      ProcessRecordsInput.builder()
+      ProcessRecordsInput
+        .builder()
         .checkpointer(checkpointer)
         .millisBehindLatest(1L)
         .records(List(record).asJava)
@@ -308,8 +323,9 @@ class KinesisWorkerSourceSourceSpec
 
       for (_ <- 1 to 3) sinkProbe.requestNext()
 
-      eventually(verify(checkpointerShard1)
-        .checkpoint())
+      eventually(
+        verify(checkpointerShard1)
+          .checkpoint())
 
       sourceProbe.sendComplete()
       sinkProbe.expectComplete()
@@ -371,7 +387,11 @@ class KinesisWorkerSourceSourceSpec
     "not checkpoint the batch if the IRecordProcessor has been shutdown" in new KinesisWorkerCheckpointContext {
       val recordProcessor = new ShardProcessor(_ => (), 1.second)
       recordProcessor.shutdownRequested(
-        ShutdownRequestedInput.builder().checkpointer(org.mockito.Mockito.mock(classOf[RecordProcessorCheckpointer])).build())
+        ShutdownRequestedInput
+          .builder()
+          .checkpointer(
+            org.mockito.Mockito.mock(classOf[RecordProcessorCheckpointer]))
+          .build())
 
       val record = org.mockito.Mockito.mock(classOf[KinesisClientRecord])
       when(record.sequenceNumber).thenReturn("1")

@@ -44,7 +44,8 @@ object KinesisWorkerSource {
   ): Flow[CommittableRecord, KinesisClientRecord, NotUsed] =
     scaladsl.KinesisWorkerSource.checkpointRecordsFlow(settings).asJava
 
-  def checkpointRecordsFlow(): Flow[CommittableRecord, KinesisClientRecord, NotUsed] =
+  def checkpointRecordsFlow()
+    : Flow[CommittableRecord, KinesisClientRecord, NotUsed] =
     checkpointRecordsFlow(KinesisWorkerCheckpointSettings.defaultInstance)
 
   def checkpointRecordsSink(

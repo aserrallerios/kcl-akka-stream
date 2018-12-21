@@ -10,12 +10,16 @@ import akka.stream.Supervision.{Resume, Stop}
 import akka.stream._
 import akka.stream.scaladsl.{Flow, GraphDSL, Keep, Sink, Source, Zip}
 import akka.{Done, NotUsed}
-import aserralle.akka.stream.kcl.Errors.{BackpressureTimeout, WorkerUnexpectedShutdown}
+import aserralle.akka.stream.kcl.Errors.{
+  BackpressureTimeout,
+  WorkerUnexpectedShutdown
+}
 import aserralle.akka.stream.kcl.{
   CommittableRecord,
   KinesisWorkerCheckpointSettings,
   KinesisWorkerSourceSettings,
-  ShardProcessor}
+  ShardProcessor
+}
 import software.amazon.kinesis.coordinator.Scheduler
 import software.amazon.kinesis.exceptions.ShutdownException
 import software.amazon.kinesis.processor.ShardRecordProcessorFactory
@@ -29,14 +33,14 @@ import scala.util.{Failure, Success}
 object KinesisWorkerSource {
 
   def apply(
-    workerBuilder: ShardRecordProcessorFactory => Scheduler,
-    settings: KinesisWorkerSourceSettings =
-      KinesisWorkerSourceSettings.defaultInstance
+      workerBuilder: ShardRecordProcessorFactory => Scheduler,
+      settings: KinesisWorkerSourceSettings =
+        KinesisWorkerSourceSettings.defaultInstance
   )(implicit workerExecutor: ExecutionContext)
     : Source[CommittableRecord, Scheduler] =
     Source
       .queue[CommittableRecord](settings.bufferSize,
-      OverflowStrategy.backpressure)
+                                OverflowStrategy.backpressure)
       .watchTermination()(Keep.both)
       .mapMaterializedValue {
         case (queue, watch) =>
@@ -52,7 +56,8 @@ object KinesisWorkerSource {
                     .foreach(err => queue.fail(BackpressureTimeout(err)))
                   semaphore.release()
                 },
-                settings.terminateStreamGracePeriod)
+                settings.terminateStreamGracePeriod
+              )
             }
           )
 
@@ -66,8 +71,8 @@ object KinesisWorkerSource {
       }
 
   def checkpointRecordsFlow(
-    settings: KinesisWorkerCheckpointSettings =
-      KinesisWorkerCheckpointSettings.defaultInstance
+      settings: KinesisWorkerCheckpointSettings =
+        KinesisWorkerCheckpointSettings.defaultInstance
   ): Flow[CommittableRecord, KinesisClientRecord, NotUsed] =
     Flow[CommittableRecord]
       .groupBy(MAX_KINESIS_SHARDS, _.shardId)
@@ -99,8 +104,8 @@ object KinesisWorkerSource {
       })
 
   def checkpointRecordsSink(
-    settings: KinesisWorkerCheckpointSettings =
-      KinesisWorkerCheckpointSettings.defaultInstance
+      settings: KinesisWorkerCheckpointSettings =
+        KinesisWorkerCheckpointSettings.defaultInstance
   ): Sink[CommittableRecord, NotUsed] =
     checkpointRecordsFlow(settings).to(Sink.ignore)
 
