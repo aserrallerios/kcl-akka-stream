@@ -22,7 +22,10 @@ import aserralle.akka.stream.kcl.{
 }
 import software.amazon.kinesis.coordinator.Scheduler
 import software.amazon.kinesis.exceptions.ShutdownException
-import software.amazon.kinesis.processor.ShardRecordProcessorFactory
+import software.amazon.kinesis.processor.{
+  ShardRecordProcessor,
+  ShardRecordProcessorFactory
+}
 import software.amazon.kinesis.retrieval.KinesisClientRecord
 
 import scala.collection.immutable
@@ -46,18 +49,19 @@ object KinesisWorkerSource {
         case (queue, watch) =>
           val semaphore = new Semaphore(1, true)
           val worker = workerBuilder(
-            () => {
-              new ShardProcessor(
-                record => {
-                  semaphore.acquire(1)
-                  (Exception.nonFatalCatch either Await.result(
-                    queue.offer(record),
-                    settings.backpressureTimeout) left)
-                    .foreach(err => queue.fail(BackpressureTimeout(err)))
-                  semaphore.release()
-                },
-                settings.terminateStreamGracePeriod
-              )
+            new ShardRecordProcessorFactory {
+              override def shardRecordProcessor(): ShardRecordProcessor =
+                new ShardProcessor(
+                  record => {
+                    semaphore.acquire(1)
+                    (Exception.nonFatalCatch either Await.result(
+                      queue.offer(record),
+                      settings.backpressureTimeout) left)
+                      .foreach(err => queue.fail(BackpressureTimeout(err)))
+                    semaphore.release()
+                  },
+                  settings.terminateStreamGracePeriod
+                )
             }
           )
 
