@@ -33,9 +33,9 @@ public class Examples {
 
     //#init-client
     Region region = Region.AWS_GLOBAL;
-    KinesisAsyncClient kinesisClient = KinesisAsyncClient.builder().region(region).build();
-    DynamoDbAsyncClient dynamoClient = DynamoDbAsyncClient.builder().region(region).build();
-    CloudWatchAsyncClient cloudWatchClient = CloudWatchAsyncClient.builder().region(region).build();
+    KinesisAsyncClient kinesisClient = null; // KinesisAsyncClient.builder().region(region).build();
+    DynamoDbAsyncClient dynamoClient = null; // DynamoDbAsyncClient.builder().region(region).build();
+    CloudWatchAsyncClient cloudWatchClient = null; // CloudWatchAsyncClient.builder().region(region).build();
     //#init-client
 
     //#init-system

@@ -39,12 +39,12 @@ object Examples {
 
   //#init-clients
   val region: Region = Region.EU_WEST_1
-  val kinesisClient: KinesisAsyncClient =
-    KinesisAsyncClient.builder.region(region).build
-  val dynamoClient: DynamoDbAsyncClient =
-    DynamoDbAsyncClient.builder.region(region).build
-  val cloudWatchClient: CloudWatchAsyncClient =
-    CloudWatchAsyncClient.builder.region(region).build
+  val kinesisClient
+    : KinesisAsyncClient = ??? // KinesisAsyncClient.builder.region(region).build
+  val dynamoClient
+    : DynamoDbAsyncClient = ??? // DynamoDbAsyncClient.builder.region(region).build
+  val cloudWatchClient
+    : CloudWatchAsyncClient = ??? //  CloudWatchAsyncClient.builder.region(region).build
   //#init-clients
 
   //#worker-settings
