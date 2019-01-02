@@ -8,8 +8,6 @@ import java.util.concurrent.{Executors, TimeoutException}
 
 import akka.actor.ActorSystem
 import akka.stream.{ActorMaterializer, Materializer}
-import com.amazonaws.services.kinesis.AmazonKinesisAsync
-import org.mockito.Mockito.reset
 import org.scalatest.mockito.MockitoSugar
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, Suite}
 
@@ -26,12 +24,6 @@ trait DefaultTestContext
   private val threadPool = Executors.newFixedThreadPool(10)
   implicit protected val executionContext =
     ExecutionContext.fromExecutor(threadPool)
-
-  implicit protected val amazonKinesisAsync: AmazonKinesisAsync =
-    mock[AmazonKinesisAsync]
-
-  override protected def beforeEach(): Unit =
-    reset(amazonKinesisAsync)
 
   override protected def afterAll(): Unit = {
     Await.ready(system.terminate(), 5.seconds)

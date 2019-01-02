@@ -9,23 +9,23 @@ import java.util.concurrent.Executor
 import akka.NotUsed
 import aserralle.akka.stream.kcl.{CommittableRecord, scaladsl, _}
 import akka.stream.javadsl.{Flow, Sink, Source}
-import com.amazonaws.services.kinesis.clientlibrary.interfaces.v2.IRecordProcessorFactory
-import com.amazonaws.services.kinesis.clientlibrary.lib.worker.Worker
-import com.amazonaws.services.kinesis.model.Record
+import software.amazon.kinesis.coordinator.Scheduler
+import software.amazon.kinesis.processor.ShardRecordProcessorFactory
+import software.amazon.kinesis.retrieval.KinesisClientRecord
 
 import scala.concurrent.ExecutionContext
 
 object KinesisWorkerSource {
 
   abstract class WorkerBuilder {
-    def build(r: IRecordProcessorFactory): Worker
+    def build(r: ShardRecordProcessorFactory): Scheduler
   }
 
   def create(
       workerBuilder: WorkerBuilder,
       settings: KinesisWorkerSourceSettings,
       workerExecutor: Executor
-  ): Source[CommittableRecord, Worker] =
+  ): Source[CommittableRecord, Scheduler] =
     scaladsl.KinesisWorkerSource
       .apply(workerBuilder.build, settings)(
         ExecutionContext.fromExecutor(workerExecutor))
@@ -34,17 +34,18 @@ object KinesisWorkerSource {
   def create(
       workerBuilder: WorkerBuilder,
       workerExecutor: Executor
-  ): Source[CommittableRecord, Worker] =
+  ): Source[CommittableRecord, Scheduler] =
     create(workerBuilder,
            KinesisWorkerSourceSettings.defaultInstance,
            workerExecutor)
 
   def checkpointRecordsFlow(
       settings: KinesisWorkerCheckpointSettings
-  ): Flow[CommittableRecord, Record, NotUsed] =
+  ): Flow[CommittableRecord, KinesisClientRecord, NotUsed] =
     scaladsl.KinesisWorkerSource.checkpointRecordsFlow(settings).asJava
 
-  def checkpointRecordsFlow(): Flow[CommittableRecord, Record, NotUsed] =
+  def checkpointRecordsFlow()
+    : Flow[CommittableRecord, KinesisClientRecord, NotUsed] =
     checkpointRecordsFlow(KinesisWorkerCheckpointSettings.defaultInstance)
 
   def checkpointRecordsSink(
