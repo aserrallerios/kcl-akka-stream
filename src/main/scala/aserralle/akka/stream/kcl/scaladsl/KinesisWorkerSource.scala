@@ -86,26 +86,23 @@ object KinesisWorkerSource {
 
         val `{` =
           b.add(scaladsl.Broadcast[immutable.Seq[CommittableRecord]](2))
-        val `}` = b.add(Zip[Done, immutable.Seq[CommittableRecord]])
+        val `}` = b.add(Zip[Boolean, immutable.Seq[CommittableRecord]])
         val `=` = b.add(Flow[KinesisClientRecord])
 
         `{`.out(0)
           .map(_.max)
-          .mapAsync(1)(r =>
-            if (r.canBeCheckpointed()) r.tryToCheckpoint()
-            else Future.successful(Done)) ~> `}`.in0
+          .mapAsync(1)(
+            r =>
+              if (r.canBeCheckpointed()) r.tryToCheckpoint()
+              else Future.successful(true)
+          ) ~> `}`.in0
         `{`.out(1) ~> `}`.in1
 
-        `}`.out.map(_._2).mapConcat(identity).map(_.record) ~> `=`
+        `}`.out.filter(_._1).map(_._2).mapConcat(identity).map(_.record) ~> `=`
 
         FlowShape(`{`.in, `=`.out)
       })
       .mergeSubstreams
-      .withAttributes(ActorAttributes.supervisionStrategy {
-        case _: ShutdownException =>
-          Resume
-        case _ => Stop
-      })
 
   def checkpointRecordsSink(
       settings: KinesisWorkerCheckpointSettings =
