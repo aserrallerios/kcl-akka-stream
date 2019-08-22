@@ -5,6 +5,7 @@
 package aserralle.akka.stream.kcl
 
 import akka.Done
+import software.amazon.kinesis.exceptions.ShutdownException
 import software.amazon.kinesis.lifecycle.ShutdownReason
 import software.amazon.kinesis.processor.RecordProcessorCheckpointer
 import software.amazon.kinesis.retrieval.KinesisClientRecord
@@ -30,10 +31,16 @@ class CommittableRecord(
   def canBeCheckpointed(): Boolean =
     recordProcessorShutdownReason().isEmpty
 
-  def tryToCheckpoint(): Future[Done] =
+  def tryToCheckpoint(): Future[Boolean] =
     Future {
-      checkpointer.checkpoint(sequenceNumber, subSequenceNumber)
-      Done
+      try {
+        checkpointer.checkpoint(sequenceNumber, subSequenceNumber)
+        true
+      } catch {
+        case _: ShutdownException =>
+          false
+        case exception => throw exception
+      }
     }
 }
 

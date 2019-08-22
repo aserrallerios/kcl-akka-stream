@@ -4,7 +4,7 @@ scala:
 - 2.11.12
 - 2.12.7
 jdk:
-- oraclejdk8
+- openjdk8
 script:
 - sbt -J-XX:ReservedCodeCacheSize=128m ++$TRAVIS_SCALA_VERSION ";test:compile"
 # make 'git branch' work again
