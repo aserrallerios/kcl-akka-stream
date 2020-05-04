@@ -1,3 +1,7 @@
+This library is **DEPRECATE** and will get no further maintenance, please use `alpakka` instead:
+
+[2.0.0 release notes](https://akka.io/blog/news/2020/04/30/alpakka-2.0.0-released)
+
 # Akka Stream Source for Kinesis Client Library [![travis-badge][]][travis] [![Bintray](https://img.shields.io/bintray/v/aserrallerios/maven/kcl-akka-stream.svg)]()
 
 [travis]:                https://travis-ci.org/aserrallerios/kcl-akka-stream
