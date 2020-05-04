@@ -1,4 +1,4 @@
-This library is **DEPRECATE** and will get no further maintenance, please use `alpakka` instead:
+This library is **DEPRECATED** and will get no further maintenance, please use `alpakka` instead:
 
 [2.0.0 release notes](https://akka.io/blog/news/2020/04/30/alpakka-2.0.0-released)
 
